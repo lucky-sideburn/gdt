@@ -1,16 +1,10 @@
 #!/bin/bash
 
-function create_vbox_vm_from_img() {
+function create_qemu_vm_from_img() {
   OS_IMAGE_BASE_DIR=./os_images
   VM_NAME=GenericDistroToolkitVM01
-  VBoxManage convertfromraw $OS_IMAGE_BASE_DIR/lfs.img $OS_IMAGE_BASE_DIR/lfs.vdi --format VDI
-  VBoxManage createvm --name $VM_NAME --ostype "Linux_64" --register
-  VBoxManage modifyvm "$VM_NAME" --memory 2048 --cpus 2 --vram 16 --ioapic on
-  VBoxManage modifyvm "$VM_NAME" --nic1 nat
-  VBoxManage storagectl "$VM_NAME" --name "SATA Controller" --add sata --controller IntelAhci
-  VBoxManage storageattach "$VM_NAME" --storagectl "SATA Controller" \
-    --port 0 --device 0 --type hdd --medium $OS_IMAGE_BASE_DIR/lfs.vdi
-  VBoxManage startvm "$VM_NAME" --type gui
+  qemu-img convert -f raw -O qcow2 $OS_IMAGE_BASE_DIR/lfs.img $OS_IMAGE_BASE_DIR/lfs.qcow2
+  virt-install --name $VM_NAME --ram 2048 --vcpus 2 --disk path=$OS_IMAGE_BASE_DIR/lfs.qcow2,format=qcow2 --os-type linux --os-variant generic --network network=default --graphics spice --cdrom $OS_IMAGE_BASE_DIR/lfs.iso
 }
 
 ansible() {
@@ -137,8 +131,8 @@ function show_menu() {
       ;;
 
     15)
-      echo "Starting AARCH64 VM on VirtualBox..."
-      create_vbox_vm_from_img
+      echo "Starting AARCH64 VM on QEMU (Vagrant AARCH64 Build Node)..."
+      create_qemu_vm_from_img
       ;;
 
     16)

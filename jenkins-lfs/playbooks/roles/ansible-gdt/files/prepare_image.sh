@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script prepares a Linux From Scratch (LFS) image for use with KVM/QEMU and Vagrant-To-VirtualBox
+# This script prepares a Linux From Scratch (LFS) image for use with KVM/QEMU
 # Parse arguments
 
 while [[ "$#" -gt 0 ]]; do
@@ -11,20 +11,20 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Validate strategy
-if [[ "$BUILD_MODE" != "host_kvm" && "$BUILD_MODE" != "vagrant_vbox" ]]; then
-  echo "[ERROR] Invalid strategy: $BUILD_MODE. Allowed values are 'host_kvm' or 'vagrant_vbox'."
+if [[ "$BUILD_MODE" != "host_libvirt" && "$BUILD_MODE" != "vagrant_qemu" ]]; then
+  echo "[ERROR] Invalid strategy: $BUILD_MODE. Allowed values are 'host_libvirt' or 'vagrant_qemu'."
   exit 1
 fi
 
 echo "[INFO] Using build strategy: $BUILD_MODE"
 
-if [[ "$BUILD_MODE" == "host_kvm" ]]; then
-  echo "[INFO] BUILD_MODE is set to host_kvm. Proceeding with KVM-specific setup..."
+if [[ "$BUILD_MODE" == "host_libvirt" ]]; then
+  echo "[INFO] BUILD_MODE is set to host_libvirt. Proceeding with KVM-specific setup..."
   IMAGE_PATH="/var/lib/libvirt/images/lfs.img"
   IMAGE_CLONE_PATH="/var/lib/libvirt/images/lfs-clone.img"
   LIVE_VM_ISO_PATH="/var/lib/libvirt/images/alpine.iso"
-elif [[ "$BUILD_MODE" == "vagrant_vbox" ]]; then
-  echo "[INFO] BUILD_MODE is set to vagrant_vbox. Proceeding with Vagrant-specific setup..."
+elif [[ "$BUILD_MODE" == "vagrant_qemu" ]]; then
+  echo "[INFO] BUILD_MODE is set to vagrant_qemu. Proceeding with Vagrant-specific setup..."
   IMAGE_PATH="/mnt/os_images/lfs.img"
   IMAGE_CLONE_PATH="/mnt/os_images/lfs-clone.img"
   LIVE_VM_ISO_PATH="/mnt/os_images/alpine.iso"
@@ -344,7 +344,7 @@ sudo ls -lh $IMAGE_PATH
 #echo "[INFO] Copying CA certificates to LFS image completed successfully."
 #sudo cp /etc/ssl/certs/ca-certificates.crt /mnt/lfs/etc/ssl/certs/
 
-if [[ "$BUILD_MODE" == "host_kvm" ]]; then
+if [[ "$BUILD_MODE" == "host_libvirt" ]]; then
   echo "[INFO] Creating a virtual machine to import LFS image..."
   sudo -i -u ubuntu virt-install \
     --name $VM_NAME \
