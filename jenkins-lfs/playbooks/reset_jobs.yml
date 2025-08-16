@@ -1,0 +1,54 @@
+---
+- name: Delete all Jenkins jobs
+  hosts: localhost
+  gather_facts: no
+ 
+  tasks:
+    - name: Get Jenkins crumb
+      uri:
+        url: "{{ jenkins_url }}/crumbIssuer/api/json"
+        method: GET
+        user: "{{ jenkins_user }}"
+        password: "{{ jenkins_token }}"
+        force_basic_auth: yes
+        return_content: yes
+      register: crumb_response
+
+    - name: Set crumb headers
+      set_fact:
+        jenkins_crumb_field: "{{ crumb_response.json.crumbRequestField }}"
+        jenkins_crumb: "{{ crumb_response.json.crumb }}"
+        crumb_header:
+          "{{ crumb_response.json.crumbRequestField }}": "{{ crumb_response.json.crumb }}"
+
+    - name: Get list of all Jenkins jobs
+      uri:
+        url: "{{ jenkins_url }}/api/json"
+        method: GET
+        user: "{{ jenkins_user }}"
+        password: "{{ jenkins_token }}"
+        force_basic_auth: yes
+        return_content: yes
+      register: jobs_response
+
+    - name: Set job list
+      set_fact:
+        job_names: "{{ jobs_response.json.jobs | map(attribute='name') | list }}"
+
+    - name: Print Jenkins job list
+      debug:
+        msg: "{{ item }}"
+      loop: "{{ job_names }}"
+
+    - name: "Delete Jenkins Job"
+      ansible.builtin.uri:
+        url: "{{ jenkins_url }}/job/{{ item | urlencode }}/doDelete"
+        method: POST
+        user: "{{ jenkins_user }}"
+        password: "{{ jenkins_token }}"
+        force_basic_auth: yes
+        status_code: 200
+        timeout: 60
+        follow_redirects: yes
+      loop: "{{ job_names }}"
+      ignore_errors: yes

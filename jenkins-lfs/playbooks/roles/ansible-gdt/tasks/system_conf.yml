@@ -1,0 +1,161 @@
+- name: Create tmp directory
+  ansible.builtin.file:
+    path: /mnt/lfs/sources/conf_tmp 
+    state: directory
+    mode: '0755'
+
+- name: Create kernel_configs directory
+  ansible.builtin.file:
+    path: /mnt/lfs/sources/kernel_configs 
+    state: directory
+    mode: '0777'
+
+- name: Copy udev_systemd-257.3.sh
+  ansible.builtin.copy:
+    src: udev_systemd-257.3.sh
+    dest: /mnt/lfs/sources/udev_systemd-257.3.sh
+    mode: '0755'
+
+- name: Copy shadow-4.17.3.sh
+  ansible.builtin.copy:
+    src: shadow-4.17.3.sh
+    dest: /mnt/lfs/sources/shadow-4.17.3.sh
+    mode: '0755'
+
+- name: Copy strip.sh
+  ansible.builtin.copy:
+    src: strip.sh
+    dest: /mnt/lfs/sources/strip.sh
+    mode: '0755'
+
+- name: Copy prepare_image.sh
+  ansible.builtin.copy:
+    src: prepare_image.sh
+    dest: /mnt/lfs/sources/prepare_image.sh
+    mode: '0755'
+
+- name: Copy sshd init script
+  ansible.builtin.copy:
+    src: sshd.init
+    dest: /mnt/lfs/sources/conf_tmp/sshd.init
+    mode: '0755'
+
+- name: Copy sshd_config
+  ansible.builtin.copy:
+    src: sshd_config
+    dest: /mnt/lfs/sources/conf_tmp/sshd_config
+    mode: '0644'
+
+- name: Copy profile
+  ansible.builtin.copy:
+    src: profile
+    dest: /mnt/lfs/sources/conf_tmp/profile
+    mode: '0644'
+
+- name: Copy kernel_config_x86_64
+  ansible.builtin.copy:
+    src: kernel_config_x86_64
+    dest: /mnt/lfs/sources/kernel_configs/kernel_config_x86_64 
+    mode: '0644'
+
+- name: Copy kernel_config_aarch64
+  ansible.builtin.copy:
+    src: kernel_config_aarch64
+    dest: /mnt/lfs/sources/kernel_configs/kernel_config_aarch64
+    mode: '0644'
+
+- name: Copy sysctl.conf
+  ansible.builtin.copy:
+    src: sysctl.conf
+    dest: /mnt/lfs/sources/conf_tmp/sysctl.conf
+    mode: '0644'
+
+- name: Copy hosts file
+  ansible.builtin.copy:
+    src: hosts
+    dest: /mnt/lfs/sources/conf_tmp/hosts
+    mode: '0644'
+
+- name: Copy crio.conf
+  ansible.builtin.copy:
+    src: crio.conf
+    dest: /mnt/lfs/sources/conf_tmp/crio.conf
+    mode: '0644'
+
+- name: Copy crio.init
+  ansible.builtin.copy:
+    src: crio.init
+    dest: /mnt/lfs/sources/conf_tmp/crio.init
+    mode: '0755'
+
+- name: Copy policy.json
+  ansible.builtin.copy:
+    src: policy.json
+    dest: /mnt/lfs/sources/conf_tmp/policy.json
+    mode: '0644'
+
+- name: Copy environment file
+  ansible.builtin.copy:
+    src: environment
+    dest: /mnt/lfs/sources/conf_tmp/environment
+    mode: '0644'
+
+- name: Copy etcd.yaml
+  ansible.builtin.copy:
+    src: etcd.yaml
+    dest: /mnt/lfs/sources/conf_tmp/etcd.yaml
+    mode: '0644'
+
+- name: Copy kube-apiserver.yaml
+  ansible.builtin.copy:
+    src: kube-apiserver.yaml
+    dest: /mnt/lfs/sources/conf_tmp/kube-apiserver.yaml
+    mode: '0644'
+
+- name: Copy kube-controller-manager.yaml
+  ansible.builtin.copy:
+    src: kube-controller-manager.yaml
+    dest: /mnt/lfs/sources/conf_tmp/kube-controller-manager.yaml
+    mode: '0644'
+
+- name: Copy kube-scheduler.yaml
+  ansible.builtin.copy:   
+    src: kube-scheduler.yaml
+    dest: /mnt/lfs/sources/conf_tmp/kube-scheduler.yaml
+    mode: '0644'
+
+- name: Copy kubelet-config.yaml
+  ansible.builtin.copy:
+    src: kubelet-config.yaml
+    dest: /mnt/lfs/sources/conf_tmp/kubelet-config.yaml
+    mode: '0644'
+
+- name: Copy kubelet.conf
+  ansible.builtin.copy:
+    src: kubelet.conf
+    dest: /mnt/lfs/sources/conf_tmp/kubelet.conf
+    mode: '0644'
+
+- name: Copy kubelet.init
+  ansible.builtin.copy:
+    src: kubelet.init
+    dest: /mnt/lfs/sources/conf_tmp/kubelet.init
+    mode: '0755'
+
+- name: Copy bash_profile
+  ansible.builtin.copy:
+    src: bash_profile
+    dest: /mnt/lfs/sources/conf_tmp/bash_profile
+    mode: '0644'
+
+- name: Copy mkinitramfs
+  ansible.builtin.copy:
+    src: mkinitramfs
+    dest: /mnt/lfs/sources/conf_tmp/mkinitramfs
+    mode: '0755'
+
+- name: Copy init.in
+  ansible.builtin.copy:
+    src: init.in
+    dest: /mnt/lfs/sources/conf_tmp/init.in
+    mode: '0755'

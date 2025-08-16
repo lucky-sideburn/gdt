@@ -1,0 +1,31 @@
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+
+cgroupDriver: cgroupfs
+
+# Container runtime
+containerRuntimeEndpoint: unix:///var/run/crio/crio.sock
+
+# Static pods path
+staticPodPath: /etc/kubernetes/manifests
+
+# CNI config dirs
+cniBinDir: /opt/cni/bin
+cniConfDir: /etc/cni/net.d
+
+# Other options utili
+failSwapOn: false
+
+# Registrazione nodi e kubeconfig
+authentication:
+  anonymous:
+    enabled: false
+  x509:
+    clientCAFile: /etc/kubernetes/certs/ca.crt
+
+authorization:
+  mode: Webhook
+
+clusterDomain: cluster.local
+clusterDNS:
+  - 10.96.0.10

@@ -1,0 +1,1 @@
+# Synced Folder for LFS

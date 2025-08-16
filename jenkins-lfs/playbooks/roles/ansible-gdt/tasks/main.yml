@@ -1,0 +1,27 @@
+- name: "Include system_conf.yml tasks"
+  include_tasks: system_conf.yml
+  tags: system_conf
+
+- name: "Include aarch64_jobs.yml tasks"
+  include_tasks: aarch64_jobs.yml
+  tags:
+    - aarch64_jobs
+    - aarch64_cross_toolchain
+    - aarch64_cross_compiling_temporary_tools
+    - aarch64_chroot_and_building_additional_temporary_tools
+    - aarch64_basic_system_software
+    - aarch64_system_configuration
+    - aarch64_containers
+    - aarch64_folders
+  
+- name: "Include amd64_jobs.yml tasks"
+  include_tasks: amd64_jobs.yml
+  tags:
+    - amd64_jobs
+    - amd64_cross_toolchain
+    - amd64_cross_compiling_temporary_tools
+    - amd64_chroot_and_building_additional_temporary_tools
+    - amd64_basic_system_software
+    - amd64_system_configuration
+    - amd64_containers
+    - amd64_folders

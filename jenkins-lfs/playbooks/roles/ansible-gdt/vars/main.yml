@@ -1,0 +1,3731 @@
+---
+# vars file for ansible-gdt
+build_tool: true
+
+lfs_packages:
+  - binutils
+  - bash
+  - bison
+  - diffutils
+  - findutils
+  - gawk
+  - gcc
+  - g++
+  - grep
+  - gzip
+  - m4
+  - make
+  - patch
+  - perl
+  - python3
+  - sed
+  - tar
+  - coreutils
+  - xz-utils
+  - texinfo
+  - libgmp-dev
+
+lfs_extra_archives:
+  - mpfr-4.2.1.tar.xz
+  - gmp-6.3.0.tar.xz
+  - mpc-1.3.1.tar.gz
+  - udev-lfs-20230818.tar.xz
+  - systemd-man-pages-257.3.tar.xz
+  - lfs-bootscripts-20240825.tar.xz
+
+chroot_start_command: |-
+  if ! mountpoint -q $LFS/dev; then
+  sudo mount -v --bind /dev $LFS/dev
+  fi
+
+  if ! mountpoint -q $LFS/dev/pts; then
+    sudo mount -vt devpts devpts -o gid=5,mode=0620 $LFS/dev/pts
+  fi
+
+  sudo chroot "$LFS" /usr/bin/env -i   \
+      HOME=/root                  \
+      TERM="$TERM"                \
+      PS1='(lfs chroot) \u:\w\$ ' \
+      PATH=/usr/bin:/usr/sbin     \
+      MAKEFLAGS="-j$(nproc)"      \
+      TESTSUITEFLAGS="-j$(nproc)" \
+      /bin/bash
+
+amd64_common_build_start_command: |-
+  echo "Linux From Scratch - Version 12.3"
+  echo "Current Directory: $(pwd)"
+  echo "Current User: $(whoami)"
+  echo "Environment Variables:"
+  set +h
+  umask 022
+  LFS=/mnt/lfs
+  LC_ALL=POSIX
+  LFS_TGT=$(uname -m)-lfs-linux-gnu
+  PATH=/usr/bin
+  if [ ! -L /bin ]; then PATH=/bin:$PATH; fi
+  PATH=$LFS/tools/bin:$PATH
+  CONFIG_SITE=$LFS/usr/share/config.site
+  export LFS LC_ALL LFS_TGT PATH CONFIG_SITE
+  export MAKEFLAGS=-j$(nproc)
+  cd $LFS/sources
+  env
+
+aarch64_common_build_start_command: |-
+  echo "Linux From Scratch - Version 12.3"
+  echo "Current Directory: $(pwd)"
+  echo "Current User: $(whoami)"
+  echo "Environment Variables:"
+  umask 022
+  LFS=/mnt/lfs
+  LC_ALL=POSIX
+  LFS_TGT=$(uname -m)-lfs-linux-gnu
+  PATH=/usr/bin
+  if [ ! -L /bin ]; then PATH=/bin:$PATH; fi
+  PATH=$LFS/tools/bin:$PATH
+  CONFIG_SITE=$LFS/usr/share/config.site
+  export LFS LC_ALL LFS_TGT PATH CONFIG_SITE
+  export MAKEFLAGS=-j$(nproc)
+  cd $LFS/sources
+  env
+
+dedicated_build_dir: |-
+  ls build || mkdir -v build
+  cd build
+
+jenkins_jobs:
+  aarch64_folders:
+    - 1.1 - aarch64_cross_toolchain
+    - 1.2 - aarch64_cross_compiling_temporary_tools
+    - 1.3 - aarch64_chroot_and_building_additional_temporary_tools
+    - 1.4 - aarch64_basic_system_software
+    - 1.5 - aarch64_system_configuration
+    - 1.6 - aarch64_containers
+
+  amd64_folders:
+    - 2.1 - amd64_cross_toolchain
+    - 2.2 - amd64_cross_compiling_temporary_tools
+    - 2.3 - amd64_chroot_and_building_additional_temporary_tools
+    - 2.4 - amd64_basic_system_software
+    - 2.5 - amd64_system_configuration
+    - 2.6 - amd64_containers
+
+  setup:
+    - Host System Requirements
+    - Final Preparation
+
+  ansible:
+    - name: Configure Jenkins all jenkins_jobs
+      archive_file: /mnt/lfs/sources/empty.tar.xz
+      source_dir: /mnt/lfs/sources
+      description: |
+        This job configures Jenkins to use the jenkins_jobs tool for managing jobs. It sets up the necessary configuration files and ensures that Jenkins can manage jobs effectively.
+      category:
+        This job is part of the Ansible setup, specifically for configuring Jenkins to use jenkins_jobs.
+      jenkins_job_url: http://localhost:8080/job/ansible/job/Configure%20Jenkins%20jenkins_jobs/
+      build_command: echo
+      build_tool: false
+      exec_command: |
+        sudo -i -u ubuntu ansible-playbook -i /home/ubuntu/gdt/jenkins-lfs/inventories/host_prod.ini  /home/ubuntu/gdt/jenkins-lfs/playbooks/start.yml 
+  
+    - name: Configure Jenkins Basic System Software Jobs
+      archive_file: /mnt/lfs/sources/empty.tar.xz
+      source_dir: /mnt/lfs/sources
+      description: |
+        This job configures Jenkins to use the jenkins_jobs tool for managing jobs. It sets up the necessary configuration files and ensures that Jenkins can manage jobs effectively.
+      category:
+        This job is part of the Ansible setup, specifically for configuring Jenkins to use jenkins_jobs.
+      jenkins_job_url: http://localhost:8080/job/ansible/job/Configure%20Jenkins%20jenkins_jobs/
+      build_command: echo
+      build_tool: false
+      exec_command: |
+        sudo -i -u ubuntu ansible-playbook -i /home/ubuntu/gdt/jenkins-lfs/inventories/host_prod.ini  /home/ubuntu/gdt/jenkins-lfs/playbooks/start.yml --tags basic_system_software
+  
+  cross_toolchain:
+    - name: 0001 - Binutils Pass 1 (Cross Toolchain)
+      version: 2.44
+      archive_file: /mnt/lfs/sources/binutils-2.44.tar.xz
+      source_dir: /mnt/lfs/sources/binutils-2.44
+      description: |
+        The Binutils package is a collection of tools for handling binary files, including the linker, assembler, and other utilities. It is crucial for building software in the LFS environment.
+      category:
+        This job is part of the cross toolchain setup, specifically for building the first pass of Binutils.
+      jenkins_job_url: http://localhost:8080/job/cross_toolchain/job/Binutils%20-%20Pass%201%20(Cross%20Toolchain)/
+      build_command: |
+        {{ dedicated_build_dir }}
+        ../configure --prefix=$LFS/tools \
+                    --with-sysroot=$LFS \
+                    --target=$LFS_TGT   \
+                    --disable-nls       \
+                    --enable-gprofng=no \
+                    --disable-werror    \
+                    --enable-new-dtags  \
+                    --enable-default-hash-style=gnu
+        make
+        make install
+
+    - name: 0002 - GCC Pass 1 (Cross Toolchain)
+      archive_file: /mnt/lfs/sources/gcc-14.2.0.tar.xz
+      version: 14.2.0
+      source_dir: /mnt/lfs/sources/gcc-14.2.0
+      description: |
+        The GCC (GNU Compiler Collection) is a compiler system that supports various programming languages. This job builds the first pass of GCC, which is essential for compiling other software in the LFS environment.
+      category:
+        This job is part of the cross toolchain setup, specifically for building the first pass of GCC.
+      jenkins_job_url: http://localhost:8080/job/cross_toolchain/job/GCC-14.2.0%20-%20Pass%201%20(Cross%20Toolchain)/
+      build_command: |
+
+        # Cannot user AND bash operator due to and error in Jenkins API
+        if [ -d ./mpfr ]; then rm -rf ./mpfr; fi
+        if [ -d ./gmp ]; then rm -rf ./gmp; fi
+        if [ -d ./mpc ]; then rm -rf ./mpc; fi
+
+        tar -xf ../mpfr-4.2.1.tar.xz
+        mv -v mpfr-4.2.1 mpfr
+        tar -xf ../gmp-6.3.0.tar.xz
+        mv -v gmp-6.3.0 gmp
+        tar -xf ../mpc-1.3.1.tar.gz
+        mv -v mpc-1.3.1 mpc
+
+        case $(uname -m) in
+          x86_64)
+            sed -e '/m64=/s/lib64/lib/' \
+                -i.orig gcc/config/i386/t-linux64
+        ;;
+        esac
+        
+        {{ dedicated_build_dir }}
+        
+        ../configure                  \
+            --target=$LFS_TGT         \
+            --prefix=$LFS/tools       \
+            --with-glibc-version=2.41 \
+            --with-sysroot=$LFS       \
+            --with-newlib             \
+            --without-headers         \
+            --enable-default-pie      \
+            --enable-default-ssp      \
+            --disable-nls             \
+            --disable-shared          \
+            --disable-multilib        \
+            --disable-threads         \
+            --disable-libatomic       \
+            --disable-libgomp         \
+            --disable-libquadmath     \
+            --disable-libssp          \
+            --disable-libvtv          \
+            --disable-libstdcxx       \
+            --enable-languages=c,c++
+        make
+        make install
+
+    - name: 0003 - Linux API Headers (Cross Toolchain)
+      archive_file: /mnt/lfs/sources/linux-6.13.4.tar.xz
+      version: 6.13.4
+      source_dir: /mnt/lfs/sources/linux-6.13.4
+      description: |
+        The Linux kernel provides the core of the operating system, and this job installs the necessary API headers for building software in the LFS environment. 
+      category:
+        This job is part of the cross toolchain setup, specifically for installing the Linux kernel API headers.
+      jenkins_job_url: http://localhost:8080/job/cross_toolchain/job/Linux-6.13.4%20API%20Headers%20(Cross%20Toolchain)/
+      build_command: |
+        make mrproper
+        make headers
+        find usr/include -type f ! -name '*.h' -delete
+        cp -rv usr/include $LFS/usr
+
+    - name: 0004 - Glibc (Cross Toolchain)
+      archive_file: /mnt/lfs/sources/glibc-2.41.tar.xz
+      version: 2.41
+      source_dir: /mnt/lfs/sources/glibc-2.41
+      description: |
+        The GNU C Library (glibc) is the standard C library for the GNU operating system and provides essential system calls and basic functions for all programs. This job builds and installs glibc, which is crucial for the LFS environment.
+      category:
+        This job is part of the cross toolchain setup, specifically for building and installing glibc.
+      jenkins_job_url: http://localhost:8080/job/cross_toolchain/job/Glibc-2.41%20(Cross%20Toolchain)/
+      build_command: |
+        case $(uname -m) in
+            i?86)   
+                ln -sfv ld-linux.so.2 $LFS/lib/ld-lsb.so.3
+            ;;
+            x86_64) 
+                ln -sfv ../lib/ld-linux-x86-64.so.2 $LFS/lib64
+                ln -sfv ../lib/ld-linux-x86-64.so.2 $LFS/lib64/ld-lsb-x86-64.so.3
+            ;;
+        esac
+        curl -O https://www.linuxfromscratch.org/patches/downloads/glibc/glibc-2.41-fhs-1.patch
+        patch -Np1 -i glibc-2.41-fhs-1.patch || echo "Patch glibc-2.41-fhs-1.patch failed, continuing anyway"
+
+        {{ dedicated_build_dir }}
+
+        ../configure                             \
+              --prefix=/usr                      \
+              --host=$LFS_TGT                    \
+              --build=$(../scripts/config.guess) \
+              --enable-kernel=5.4                \
+              --with-headers=$LFS/usr/include    \
+              --disable-nscd                     \
+              libc_cv_slibdir=/usr/lib
+        make
+        make DESTDIR=$LFS install
+        sed '/RTLDLIST=/s@/usr@@g' -i $LFS/usr/bin/ldd
+        echo 'int main(){}' | $LFS_TGT-gcc -xc -
+        readelf -l a.out | grep ld-linux
+
+    - name: 0005 - Libstdc++ from GCC  (Cross Toolchain)
+      version: 14.2.0
+      archive_file: /mnt/lfs/sources/gcc-14.2.0.tar.xz
+      source_dir: /mnt/lfs/sources/gcc-14.2.0
+      description: |
+        The GNU Standard C++ Library (libstdc++) is the standard C++ library for the GNU Compiler Collection (GCC). This job builds and installs libstdc++, which is essential for C++ development in the LFS environment.
+      category:
+        This job is part of the cross toolchain setup, specifically for building and installing libstdc++ from GCC-14.2.0.
+      jenkins_job_url: http://localhost:8080/job/cross_toolchain/job/Libstdc++%20from%20GCC-14.2.0%20(Cross%20Toolchain)/
+      build_command: |
+        {{ dedicated_build_dir }}
+        ../libstdc++-v3/configure         \
+          --host=$LFS_TGT                 \
+          --build=$(../config.guess)      \
+          --prefix=/usr                   \
+          --disable-multilib              \
+          --disable-nls                   \
+          --disable-libstdcxx-pch         \
+          --with-gxx-include-dir=/tools/$LFS_TGT/include/c++/14.2.0
+        make
+
+        echo "Installing on $LFS"
+        make DESTDIR=$LFS install
+      
+        rm -v $LFS/usr/lib/lib{stdc++{,exp,fs},supc++}.la || echo "Removing libstdc++ libraries failed, continuing anyway"
+
+  cross_compiling_temporary_tools:
+    - name: 0001 - M4 (Cross Compiling Temporary Tools)
+      version: 1.4.19
+      archive_file: /mnt/lfs/sources/m4-1.4.19.tar.xz
+      source_dir: /mnt/lfs/sources/m4-1.4.19
+      description: |
+        M4 is a macro processor that is used by many build systems to generate configuration files and other scripts. This job builds M4, which is necessary for processing macros in the LFS environment.  
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building M4.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/M4-1.4.19%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr   \
+                    --host=$LFS_TGT \
+                    --build=$(build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0002 - Ncurses (Cross Compiling Temporary Tools)
+      version: 6.5
+      archive_file: /mnt/lfs/sources/ncurses-6.5.tar.gz
+      source_dir: /mnt/lfs/sources/ncurses-6.5
+      description: |
+        Ncurses is a library that provides functions to write text-based user interfaces in a terminal. This job builds Ncurses, which is essential for many terminal-based applications in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Ncurses.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Ncurses-6.5%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        mkdir build || echo "Creating build directory failed, continuing anyway"
+        pushd build
+          ../configure AWK=gawk
+          make -C include
+          make -C progs tic
+        popd
+
+        ./configure --prefix=/usr                \
+                    --host=$LFS_TGT              \
+                    --build=$(./config.guess)    \
+                    --mandir=/usr/share/man      \
+                    --with-manpage-format=normal \
+                    --with-shared                \
+                    --without-normal             \
+                    --with-cxx-shared            \
+                    --without-debug              \
+                    --without-ada                \
+                    --disable-stripping          \
+                    AWK=gawk
+          make
+          make DESTDIR=$LFS TIC_PATH=$(pwd)/build/progs/tic install
+          ln -sv libncursesw.so $LFS/usr/lib/libncurses.so || echo "Symlink libncursesw.so to libncurses.so failed, continuing anyway"
+          sed -e 's/^#if.*XOPEN.*$/#if 1/' \
+              -i $LFS/usr/include/curses.h
+
+    # TODO = During ARM build  CFLAGS="-Wno-implicit-function-declaration", why?
+    - name: 0003 - Bash (Cross Compiling Temporary Tools)
+      version: 5.2.37
+      archive_file: /mnt/lfs/sources/bash-5.2.37.tar.gz
+      source_dir: /mnt/lfs/sources/bash-5.2.37
+      description: |
+        Bash is the GNU Bourne Again SHell, a command processor that typically runs in a text window where the user types commands that cause actions. This job builds Bash, which is essential for the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Bash.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Bash-5.2.37%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr                      \
+                    --build=$(sh support/config.guess) \
+                    --host=$LFS_TGT                    \
+                    --without-bash-malloc
+        make
+        make DESTDIR=$LFS install
+        ln -sv bash $LFS/bin/sh || echo "Symlink bash to sh failed, continuing anyway"
+
+    - name: 0004 - Coreutils (Cross Compiling Temporary Tools)
+      version: 9.6
+      archive_file: /mnt/lfs/sources/coreutils-9.6.tar.xz
+      source_dir: /mnt/lfs/sources/coreutils-9.6
+      description: |
+        Coreutils is a package that contains the basic file, shell, and text manipulation utilities of the GNU operating system. This job builds Coreutils, which provides essential commands for managing files and processes in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Coreutils.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Coreutils-9.6%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+            ./configure --prefix=/usr             \
+                --host=$LFS_TGT                   \
+                --build=$(build-aux/config.guess) \
+                --enable-install-program=hostname \
+                --enable-no-install-program=kill,uptime
+            make
+            make DESTDIR=$LFS install
+            mv -v $LFS/usr/bin/chroot              $LFS/usr/sbin
+      # TODO - I have commented this out, think if I need it man pages for chroot            
+      # mkdir -pv $LFS/usr/share/man/man8 || echo "Creating directory /usr/share
+      # mv -v $LFS/usr/share/man/man1/chroot.1 $LFS/usr/share/man/man8/chroot.8 || echo "Moving chroot.1 to chroot.8 failed, continuing anyway"
+      # sed -i 's/"1"/"8"/'                    $LFS/usr/share/man/man8/chroot.8
+
+    - name: 0005 - Diffutils (Cross Compiling Temporary Tools)
+      version: 3.11
+      archive_file: /mnt/lfs/sources/diffutils-3.11.tar.xz
+      source_dir: /mnt/lfs/sources/diffutils-3.11
+      description: |
+        Diffutils is a package that contains the GNU diff, cmp, comm, and sdiff utilities, which are used to compare files and directories. This job builds Diffutils, which is essential for file comparison in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Diffutils.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Diffutils-3.11%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr   \
+                    --host=$LFS_TGT \
+                    --build=$(./build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0006 - File (Cross Compiling Temporary Tools)
+      version: 5.46
+      archive_file: /mnt/lfs/sources/file-5.46.tar.gz
+      source_dir: /mnt/lfs/sources/file-5.46
+      description: |
+        File is a utility that determines the type of a file based on its content. This job builds File, which is essential for identifying file types in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building File.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/File-5.46%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        mkdir build
+        pushd build
+          ../configure --disable-bzlib      \
+                      --disable-libseccomp \
+                      --disable-xzlib      \
+                      --disable-zlib
+          make
+        popd
+        ./configure --prefix=/usr --host=$LFS_TGT --build=$(./config.guess)
+        make FILE_COMPILE=$(pwd)/build/src/file
+        make DESTDIR=$LFS install
+        rm -v $LFS/usr/lib/libmagic.la
+  
+    - name: 0007 - Findutils (Cross Compiling Temporary Tools)
+      version: 4.10.0
+      archive_file: /mnt/lfs/sources/findutils-4.10.0.tar.xz
+      source_dir: /mnt/lfs/sources/findutils-4.10.0
+      description: |
+        Findutils is a package that provides the find, xargs, and locate utilities, which are used to search for files and directories. This job builds Findutils, which is essential for file searching in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Findutils.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Findutils-4.10.0%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr                   \
+                    --localstatedir=/var/lib/locate \
+                    --host=$LFS_TGT                 \
+                    --build=$(build-aux/config.guess)
+          make
+          make DESTDIR=$LFS install  
+
+    - name: 0008 - Gawk (Cross Compiling Temporary Tools)
+      version: 5.3.1
+      archive_file: /mnt/lfs/sources/gawk-5.3.1.tar.xz
+      source_dir: /mnt/lfs/sources/gawk-5.3.1
+      description: |
+        Gawk is a programming language designed for text processing and typically used as a data extraction and reporting tool. This job builds Gawk, which is essential for text processing in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Gawk.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Gawk-5.3.1%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        sed -i 's/extras//' Makefile.in
+        ./configure --prefix=/usr   \
+                    --host=$LFS_TGT \
+                    --build=$(build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0009 - Grep (Cross Compiling Temporary Tools)
+      version: 3.11
+      archive_file: /mnt/lfs/sources/grep-3.11.tar.xz
+      source_dir: /mnt/lfs/sources/grep-3.11
+      description: |
+        Grep is a command-line utility for searching plain-text data for lines that match a regular expression. This job builds Grep, which is essential for text searching in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Grep.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Grep-3.11%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr   \
+                    --host=$LFS_TGT \
+                    --build=$(./build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0010 - Gzip (Cross Compiling Temporary Tools)
+      version: 1.13
+      archive_file: /mnt/lfs/sources/gzip-1.13.tar.xz
+      source_dir: /mnt/lfs/sources/gzip-1.13
+      description: |
+        Gzip is a file compression utility that reduces the size of files using the DEFLATE algorithm. This job builds Gzip, which is essential for file compression in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Gzip.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Gzip-1.13%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr --host=$LFS_TGT
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0011 - Make (Cross Compiling Temporary Tools)
+      version: 4.4.1
+      archive_file: /mnt/lfs/sources/make-4.4.1.tar.gz
+      source_dir: /mnt/lfs/sources/make-4.4.1
+      description: |
+        Make is a build automation tool that automatically builds executable programs and libraries from source code by reading files called Makefiles. This job builds Make, which is essential for building software in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Make.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Make-4.4.1%20(Cross%20Compiling%20Temporary%20Tools)/  
+      build_command: |
+        ./configure --prefix=/usr   \
+                    --without-guile \
+                    --host=$LFS_TGT \
+                    --build=$(build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0012 - Patch (Cross Compiling Temporary Tools)
+      version: 2.7.6
+      archive_file: /mnt/lfs/sources/patch-2.7.6.tar.xz
+      source_dir: /mnt/lfs/sources/patch-2.7.6
+      description: |
+        Patch is a utility that applies changes to files based on a diff file. This job builds Patch, which is essential for applying patches in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Patch.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Patch-2.7.6%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr   \
+                    --host=$LFS_TGT \
+                    --build=$(build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0013 - Sed (Cross Compiling Temporary Tools)
+      version: 4.9 
+      archive_file: /mnt/lfs/sources/sed-4.9.tar.xz
+      source_dir: /mnt/lfs/sources/sed-4.9
+      description: |
+        Sed is a stream editor that can perform basic text transformations on an input stream (a file or input from a pipeline). This job builds Sed, which is essential for text processing in the LFS environment.  
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Sed.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Sed-4.9%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr   \
+                    --host=$LFS_TGT \
+                    --build=$(./build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0014 - Tar (Cross Compiling Temporary Tools)
+      version: 1.35
+      archive_file: /mnt/lfs/sources/tar-1.35.tar.xz
+      source_dir: /mnt/lfs/sources/tar-1.35
+      description: |
+        Tar is a utility for collecting many files into one archive file, often used for backup and distribution. This job builds Tar, which is essential for file archiving in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Tar.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Tar-1.35%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr                     \
+                    --host=$LFS_TGT                   \
+                    --build=$(build-aux/config.guess)
+        make
+        make DESTDIR=$LFS install
+
+    - name: 0015 - Xz (Cross Compiling Temporary Tools)
+      version: 5.6.4
+      archive_file: /mnt/lfs/sources/xz-5.6.4.tar.xz
+      source_dir: /mnt/lfs/sources/xz-5.6.4
+      description: |
+        Xz is a data compression tool that uses the LZMA algorithm. This job builds Xz, which is essential for file compression in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building Xz.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Xz-5.6.4%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        ./configure --prefix=/usr                     \
+                    --host=$LFS_TGT                   \
+                    --build=$(build-aux/config.guess) \
+                    --disable-static                  \
+                    --docdir=/usr/share/doc/xz-5.6.4
+        make
+        make DESTDIR=$LFS install
+        rm -v $LFS/usr/lib/liblzma.la
+
+    - name: 0016 - Binutils (Cross Compiling Temporary Tools)
+      version: 2.44
+      buid_tool: true
+      archive_file: /mnt/lfs/sources/binutils-2.44.tar.xz
+      source_dir: /mnt/lfs/sources/binutils-2.44
+      description: |
+        The Binutils package is a collection of tools for handling binary files, including the linker, assembler, and other utilities. This job builds the second pass of Binutils, which is essential for building software in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building the second pass of Binutils.
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/Binutils-2.44%20-%20Pass%202%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        cd $LFS/sources
+        rm -rf /mnt/lfs/sources/binutils-2.44 || echo "Removing binutils-2.44 directory failed, continuing anyway"
+        tar -xvf ./binutils-2.44.tar.xz
+        cd binutils-2.44
+        sed '6031s/$add_dir//' -i ltmain.sh
+        mkdir -v build || echo "Creating build directory failed, continuing anyway"
+        cd       build
+        ../configure                   \
+            --prefix=/usr              \
+            --build=$(../config.guess) \
+            --host=$LFS_TGT            \
+            --disable-nls              \
+            --enable-shared            \
+            --enable-gprofng=no        \
+            --disable-werror           \
+            --enable-64-bit-bfd        \
+            --enable-new-dtags         \
+            --enable-default-hash-style=gnu
+        make
+        make DESTDIR=$LFS install
+        rm -v $LFS/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.{a,la}
+
+    - name: 0017 - GCC Pass 2 (Cross Compiling Temporary Tools)
+      archive_file: /mnt/lfs/sources/gcc-14.2.0.tar.xz
+      source_dir: /mnt/lfs/sources/gcc-14.2.0
+      buid_tool: true
+      description: |
+        The GCC (GNU Compiler Collection) is a compiler system that supports various programming languages. This job builds the second pass of GCC, which is essential for compiling other software in the LFS environment.
+      category:
+        This job is part of the cross compiling temporary tools setup, specifically for building the second pass of GCC.  
+      jenkins_job_url: http://localhost:8080/job/cross_compiling_temporary_tools/job/GCC-14.2.0%20-%20Pass%202%20(Cross%20Compiling%20Temporary%20Tools)/
+      build_command: |
+        cd $LFS/sources
+        rm -rf /mnt/lfs/sources/gcc-14.2.0
+        tar -xf ./gcc-14.2.0.tar.xz
+        cd gcc-14.2.0
+        tar -xf ../mpfr-4.2.1.tar.xz
+        mv -v mpfr-4.2.1 mpfr
+        tar -xf ../gmp-6.3.0.tar.xz
+        mv -v gmp-6.3.0 gmp
+        tar -xf ../mpc-1.3.1.tar.gz
+        mv -v mpc-1.3.1 mpc
+        case $(uname -m) in
+          x86_64)
+            sed -e '/m64=/s/lib64/lib/' \
+                -i.orig gcc/config/i386/t-linux64
+          ;;
+        esac
+        sed '/thread_header =/s/@.*@/gthr-posix.h/' \
+            -i libgcc/Makefile.in libstdc++-v3/include/Makefile.in
+        mkdir -v build || echo "Creating build directory failed, continuing anyway"
+        cd       build
+        ../configure                                       \
+            --build=$(../config.guess)                     \
+            --host=$LFS_TGT                                \
+            --target=$LFS_TGT                              \
+            LDFLAGS_FOR_TARGET=-L$PWD/$LFS_TGT/libgcc      \
+            --prefix=/usr                                  \
+            --with-build-sysroot=$LFS                      \
+            --enable-default-pie                           \
+            --enable-default-ssp                           \
+            --disable-nls                                  \
+            --disable-multilib                             \
+            --disable-libatomic                            \
+            --disable-libgomp                              \
+            --disable-libquadmath                          \
+            --disable-libsanitizer                         \
+            --disable-libssp                               \
+            --disable-libvtv                               \
+            --enable-languages=c,c++
+            make
+            make DESTDIR=$LFS install
+            if [ -L $LFS/usr/bin/cc ];then
+              sudo unlink $LFS/usr/bin/cc
+            fi
+            ln -sv gcc $LFS/usr/bin/cc
+  
+  chroot_and_building_additional_temporary_tools:
+    - name: 0001 - Changing Ownership and Preparing Virtual Kernel File Systems (Chroot and Building Additional Temporary Tools)
+      version: 1.0
+      archive_file: /mnt/lfs/sources/empty.tar.xz
+      source_dir: /mnt/lfs/sources
+      description: |
+        This job changes the ownership of the LFS directories to root:root and prepares the environment for chrooting into the LFS system. It mounts necessary filesystems and sets up the environment for building additional temporary tools.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for changing ownership and preparing the environment.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Changing%20Ownership%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      build_tool: false
+      build_command: echo
+      exec_command: |
+        sudo mkdir -pv $LFS/{dev,proc,sys,run}
+        sudo mkdir -pv $LFS/dev/pts
+
+        sudo chown --from lfs -R root:root $LFS/{usr,lib,var,etc,bin,sbin,tools}
+        case $(uname -m) in
+          x86_64) sudo chown --from lfs -R root:root $LFS/lib64 ;;
+        esac
+
+        if ! mountpoint -q $LFS/dev; then
+          sudo mount -v --bind /dev $LFS/dev
+        fi
+
+        if ! mountpoint -q $LFS/dev/pts; then
+          sudo mount -vt devpts devpts -o gid=5,mode=0620 $LFS/dev/pts
+        fi
+
+        if ! mountpoint -q $LFS/proc; then
+          sudo mount -vt proc proc $LFS/proc
+        fi
+
+        if ! mountpoint -q $LFS/sys; then
+          sudo mount -vt sysfs sysfs $LFS/sys
+        fi
+
+        if ! mountpoint -q $LFS/run; then
+          sudo mount -vt tmpfs tmpfs $LFS/run
+        fi    
+        
+        if [ -h $LFS/dev/shm ]; then
+          sudo install -v -d -m 1777 $LFS$(realpath /dev/shm)
+        else
+          sudo mount -vt tmpfs -o nosuid,nodev tmpfs $LFS/dev/shm
+        fi
+
+        sudo chroot "$LFS" /usr/bin/env -i   \
+          HOME=/root                  \
+          TERM="$TERM"                \
+          PS1='(lfs chroot) \u:\w\$ ' \
+          PATH=/usr/bin:/usr/sbin     \
+          MAKEFLAGS="-j$(nproc)"      \
+          TESTSUITEFLAGS="-j$(nproc)" \
+          /bin/bash -v
+  
+        {{ chroot_start_command }} -c 'mkdir -pv /{boot,home,mnt,opt,srv} || echo "Creating directories /boot, /home, /mnt, /opt, /srv failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /etc/{opt,sysconfig} || echo "Creating directories /etc/opt, /etc/sysconfig failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /lib/firmware || echo "Creating directory /lib/firmware failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /media/{floppy,cdrom} || echo "Creating directories /media/floppy, /media/cdrom failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /usr/{,local/}{include,src} || echo "Creating directories /usr/include, /usr/src, /usr/local/include, /usr/local/src failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /usr/lib/locale || echo "Creating directory /usr/lib/locale failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /usr/local/{bin,lib,sbin} || echo "Creating directories /usr/local/bin, /usr/local/lib, /usr/local/sbin failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /usr/{,local/}share/{color,dict,doc,info,locale,man} || echo "Creating directories /usr/share/color, /usr/share/dict, /usr/share/doc, /usr/share/info, /usr/share/locale, /usr/share"'
+        {{ chroot_start_command }} -c 'mkdir -pv /usr/{,local/}share/{misc,terminfo,zoneinfo} || echo "Creating directories /usr/share/misc, /usr/share/terminfo, /usr/share/zoneinfo failed, continuing anyway"'
+        {{ chroot_start_command }} -c 'mkdir -pv /usr/{,local/}share/man/man{1..8} || echo "Creating directories /usr/share"'
+        {{ chroot_start_command }} -c 'mkdir -pv /var/{cache,local,log,mail,opt,spool} || echo'
+        {{ chroot_start_command }} -c 'mkdir -pv /var/lib/{color,misc,locate} || echo "Creating directories /var/lib/color, /var/lib/misc, /var/lib/locate failed, continuing anyway"'
+
+        {{ chroot_start_command }} -c 'ln -sfv /run /var/run'
+        {{ chroot_start_command }} -c 'ln -sfv /run/lock /var/lock'
+
+        {{ chroot_start_command }} -c 'install -dv -m 0750 /root'
+        {{ chroot_start_command }} -c 'install -dv -m 1777 /tmp /var/tmp'
+
+        {{ chroot_start_command }} -c 'ln -sv /proc/self/mounts /etc/mtab || echo "Symlink /proc/self/mounts to /etc/mtab failed, continuing anyway"'
+
+        # EOF break jenkins job upload via API...
+        {{ chroot_start_command }} -c '/usr/bin/echo "127.0.0.1  localhost\n::1        localhost" > /etc/hosts'
+
+        # EOF break jenkins job upload via API...
+        {{ chroot_start_command }} -c ' 
+        /usr/bin/echo "root:x:0:0:root:/root:/bin/bash" > /etc/passwd
+        /usr/bin/echo "bin:x:1:1:bin:/dev/null:/usr/bin/false" >> /etc/passwd
+        /usr/bin/echo "daemon:x:6:6:Daemon User:/dev/null:/usr/bin/false" >> /etc/passwd
+        /usr/bin/echo "messagebus:x:18:18:D-Bus Message Daemon User:/run/dbus:/usr/bin/false" >> /etc/passwd
+        /usr/bin/echo "uuidd:x:80:80:UUID Generation Daemon User:/dev/null:/usr/bin/false" >> /etc/passwd
+        /usr/bin/echo "nobody:x:65534:65534:Unprivileged User:/dev/null:/usr/bin/false" >> /etc/passwd
+        '
+
+        {{ chroot_start_command }} -c '
+        /usr/bin/echo "root:x:0:" > /etc/group
+        /usr/bin/echo "bin:x:1:daemon" >> /etc/group
+        /usr/bin/echo "sys:x:2:" >> /etc/group
+        /usr/bin/echo "kmem:x:3:" >> /etc/group
+        /usr/bin/echo "tape:x:4:" >> /etc/group
+        /usr/bin/echo "tty:x:5:" >> /etc/group
+        /usr/bin/echo "daemon:x:6:" >> /etc/group
+        /usr/bin/echo "floppy:x:7:" >> /etc/group
+        /usr/bin/echo "disk:x:8:" >> /etc/group
+        /usr/bin/echo "lp:x:9:" >> /etc/group
+        /usr/bin/echo "dialout:x:10:" >> /etc/group
+        /usr/bin/echo "audio:x:11:" >> /etc/group
+        /usr/bin/echo "video:x:12:" >> /etc/group
+        /usr/bin/echo "utmp:x:13:" >> /etc/group
+        /usr/bin/echo "cdrom:x:15:" >> /etc/group
+        /usr/bin/echo "adm:x:16:" >> /etc/group
+        /usr/bin/echo "messagebus:x:18:" >> /etc/group
+        /usr/bin/echo "input:x:24:" >> /etc/group
+        /usr/bin/echo "mail:x:34:" >> /etc/group
+        /usr/bin/echo "kvm:x:61:" >> /etc/group
+        /usr/bin/echo "uuidd:x:80:" >> /etc/group
+        /usr/bin/echo "wheel:x:97:" >> /etc/group
+        /usr/bin/echo "users:x:999:" >> /etc/group
+        /usr/bin/echo "nogroup:x:65534:" >> /etc/group
+        '
+        {{ chroot_start_command }} -c 'echo "tester:x:101:101::/home/tester:/bin/bash" >> /etc/passwd'
+        {{ chroot_start_command }} -c 'echo "tester:x:101:" >> /etc/group'
+        {{ chroot_start_command }} -c 'install -o tester -d /home/tester'
+
+        {{ chroot_start_command }} -c 'touch /var/log/{btmp,lastlog,faillog,wtmp}'
+        {{ chroot_start_command }} -c 'chgrp -v utmp /var/log/lastlog'
+        {{ chroot_start_command }} -c 'chmod -v 664  /var/log/lastlog'
+        {{ chroot_start_command }} -c 'chmod -v 600  /var/log/btmp'
+
+    - name: 0002 - Gettext (Chroot and Building Additional Temporary Tools)
+      version: 0.24
+      archive_file: /sources/gettext-0.24.tar.xz
+      source_dir: /sources/gettext-0.24
+      description: |
+        Gettext is a set of tools for internationalization and localization of software. This job builds Gettext, which is essential for providing translations in the LFS environment.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for building Gettext.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Gettext-0.24%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gettext-0.24
+          ./configure --disable-shared
+          make
+          cp -v gettext-tools/src/{msgfmt,msgmerge,xgettext} /usr/bin
+        '
+
+    - name: 0003 - Bison (Chroot and Building Additional Temporary Tools)
+      version: 3.8.2
+      archive_file: /sources/bison-3.8.2.tar.xz
+      source_dir: /sources/bison-3.8.2
+      description: |
+        Bison is a parser generator that is part of the GNU Project. This job builds Bison, which is essential for generating parsers in the LFS environment.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for building Bison.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Bison-3.8.2%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/bison-3.8.2
+          ./configure --prefix=/usr \
+                      --docdir=/usr/share/doc/bison-3.8.2
+          make
+          make install
+        '
+
+    - name: 0004 - Perl (Chroot and Building Additional Temporary Tools)
+      version: 5.40.1
+      archive_file: /sources/perl-5.40.1.tar.xz
+      source_dir: /sources/perl-5.40.1
+      description: |
+        Perl is a high-level, general-purpose, interpreted, dynamic programming language. This job builds Perl, which is essential for scripting and automation in the LFS environment.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for building Perl.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Perl-5.40.1%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/perl-5.40.1
+          sh Configure -des                                        \
+                      -D prefix=/usr                               \
+                      -D vendorprefix=/usr                         \
+                      -D useshrplib                                \
+                      -D privlib=/usr/lib/perl5/5.40/core_perl     \
+                      -D archlib=/usr/lib/perl5/5.40/core_perl     \
+                      -D sitelib=/usr/lib/perl5/5.40/site_perl     \
+                      -D sitearch=/usr/lib/perl5/5.40/site_perl    \
+                      -D vendorlib=/usr/lib/perl5/5.40/vendor_perl \
+                      -D vendorarch=/usr/lib/perl5/5.40/vendor_perl 
+          make
+          make install
+        '
+
+    - name: 0005 - Python (Chroot and Building Additional Temporary Tools)
+      version: 3.13.2
+      archive_file: /sources/Python-3.13.2.tar.xz
+      source_dir: /sources/Python-3.13.2
+      exec_command: echo
+      description: |
+        Python is a high-level, interpreted programming language known for its readability and versatility. This job builds Python, which is essential for scripting and automation in the LFS environment.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for building Python.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Python-3.13.2%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/Python-3.13.2
+          ./configure --prefix=/usr   \
+                      --enable-shared \
+                      --without-ensurepip
+          make
+          make install
+        '
+
+    - name: 0006 - Texinfo (Chroot and Building Additional Temporary Tools)
+      version: 7.2
+      archive_file: /sources/texinfo-7.2.tar.xz
+      source_dir: /sources/texinfo-7.2
+      exec_command: echo
+      build_tool: true
+      description: |
+        Texinfo is a documentation system that uses a single source file to produce both online and printed documentation. This job builds Texinfo, which is essential for generating documentation in the LFS environment.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for building Texinfo.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Texinfo-7.2%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/texinfo-7.2
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0007 - Util-linux (Chroot and Building Additional Temporary Tools)
+      version: 2.40.4
+      archive_file: /sources/util-linux-2.40.4.tar.xz
+      source_dir: /sources/util-linux-2.40.4
+      description: |
+        Util-linux is a standard package that contains a variety of essential utilities for Linux systems, including mount, fdisk, and more. This job builds Util-linux, which is essential for system management in the LFS environment.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for building Util-linux.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Util-linux-2.40.4%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/util-linux-2.40.4
+          mkdir -pv /var/lib/hwclock
+          ./configure --libdir=/usr/lib     \
+                      --runstatedir=/run    \
+                      --disable-chfn-chsh   \
+                      --disable-login       \
+                      --disable-nologin     \
+                      --disable-su          \
+                      --disable-setpriv     \
+                      --disable-runuser     \
+                      --disable-pylibmount  \
+                      --disable-static      \
+                      --disable-liblastlog2 \
+                      --without-python      \
+                      ADJTIME_PATH=/var/lib/hwclock/adjtime \
+                      --docdir=/usr/share/doc/util-linux-2.40.4
+          make
+          make install
+        '
+
+    - name: 0008 - Cleaning up and Saving the Temporary System (Chroot and Building Additional Temporary Tools)
+      version: 1.0
+      archive_file: /mnt/lfs/sources/empty.tar.xz
+      source_dir: /mnt/lfs/sources
+      build_tool: false
+      build_command: echo
+      description: |
+        This job cleans up the temporary system by removing unnecessary files and directories, ensuring that the LFS environment is ready for the next steps. It also saves the temporary system state.
+      category:
+        This job is part of the chroot and building additional temporary tools setup, specifically for cleaning up and saving the temporary system.
+      jenkins_job_url: http://localhost:8080/job/chroot_and_building_additional_temporary_tools/job/Cleaning%20up%20and%20Saving%20the%20Temporary%20System%20(Chroot%20and%20Building%20Additional%20Temporary%20Tools)/
+      exec_command: |
+        {{ chroot_start_command }} -c '
+        rm -rf /usr/share/{info,man,doc}/*
+        find /usr/{lib,libexec} -name \*.la -delete
+        echo "ATTENTION!! Think if you are ready for delete /tools directory or not!"
+        '
+  
+  basic_system_software:
+    - name: 0001 - Man-pages (Basic System Software)
+      version: 6.12
+      archive_file: /sources/man-pages-6.12.tar.xz  
+      source_dir: /sources/man-pages-6.12
+      category:
+        This job is part of the basic system software setup, specifically for building a standard toolchain and essential system utilities.
+      description: |
+        Man-pages provides the manual pages for the Linux operating system, which are essential for understanding commands and system calls. This build man-pages, which is crucial for documentation in the LFS environment.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/man-pages-6.12%20(Basic%20System%20Software)/
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/man-pages-6.12
+          rm -v man3/crypt*
+          make -R GIT=false prefix=/usr install
+        '
+
+    - name: 0002 - Iana-Etc (Basic System Software)
+      version: 20250123
+      archive_file: /sources/iana-etc-20250123.tar.gz
+      source_dir: /sources/iana-etc-20250123
+      description: |
+        Iana-Etc provides the standard files for network protocols and services, which are essential for networking in the LFS environment. This job builds Iana-Etc, which is crucial for network configuration.
+      category:
+        This job is part of the basic system software setup, specifically for building Iana-Etc.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Iana-Etc-202
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/iana-etc-20250123
+          cp services protocols /etc
+        '
+
+    - name: 0003 - Glibc (Basic System Software)
+      version: 2.41
+      archive_file: /sources/glibc-2.41.tar.xz
+      source_dir: /sources/glibc-2.41
+      exec_command: echo
+      description: |
+        Glibc (GNU C Library) is the standard C library for the GNU operating system. It provides the core libraries for the system, including functions for memory management, string manipulation, and input/output operations. This job builds Glibc, which is essential for the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Glibc.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Glibc-2.41
+      build_tool: true
+      build_command: |
+        cd /mnt/lfs/sources
+        rm -rf /mnt/lfs/sources/glibc-2.41 || echo "Removing glibc-2.41 directory failed, continuing anyway"
+        tar -xf ./glibc-2.41.tar.xz
+        cd glibc-2.41
+        curl -O https://www.linuxfromscratch.org/patches/downloads/glibc/glibc-2.41-fhs-1.patch
+        {{ chroot_start_command }} -c "
+          cd /sources/glibc-2.41
+          patch -Np1 -i glibc-2.41-fhs-1.patch
+          mkdir -v build
+          cd       build
+          echo \"rootsbindir=/usr/sbin\" > configparms
+          ../configure --prefix=/usr                            \
+                      --disable-werror                         \
+                      --enable-kernel=5.4                      \
+                      --enable-stack-protector=strong          \
+                      --disable-nscd                           \
+                      libc_cv_slibdir=/usr/lib
+          make
+          make install 
+          sed '/RTLDLIST=/s@/usr@@g' -i /usr/bin/ldd
+          localedef -i C -f UTF-8 C.UTF-8
+          localedef -i cs_CZ -f UTF-8 cs_CZ.UTF-8
+          localedef -i de_DE -f ISO-8859-1 de_DE
+          localedef -i de_DE@euro -f ISO-8859-15 de_DE@euro
+          localedef -i de_DE -f UTF-8 de_DE.UTF-8
+          localedef -i el_GR -f ISO-8859-7 el_GR
+          localedef -i en_GB -f ISO-8859-1 en_GB
+          localedef -i en_GB -f UTF-8 en_GB.UTF-8
+          localedef -i en_HK -f ISO-8859-1 en_HK
+          localedef -i en_PH -f ISO-8859-1 en_PH
+          localedef -i en_US -f ISO-8859-1 en_US
+          localedef -i en_US -f UTF-8 en_US.UTF-8
+          localedef -i es_ES -f ISO-8859-15 es_ES@euro
+          localedef -i es_MX -f ISO-8859-1 es_MX
+          localedef -i fa_IR -f UTF-8 fa_IR
+          localedef -i fr_FR -f ISO-8859-1 fr_FR
+          localedef -i fr_FR@euro -f ISO-8859-15 fr_FR@euro
+          localedef -i fr_FR -f UTF-8 fr_FR.UTF-8
+          localedef -i is_IS -f ISO-8859-1 is_IS
+          localedef -i is_IS -f UTF-8 is_IS.UTF-8
+          localedef -i it_IT -f ISO-8859-1 it_IT
+          localedef -i it_IT -f ISO-8859-15 it_IT@euro
+          localedef -i it_IT -f UTF-8 it_IT.UTF-8
+          localedef -i ja_JP -f EUC-JP ja_JP
+          localedef -i ja_JP -f SHIFT_JIS ja_JP.SJIS 2> /dev/null || true
+          localedef -i ja_JP -f UTF-8 ja_JP.UTF-8
+          localedef -i nl_NL@euro -f ISO-8859-15 nl_NL@euro
+          localedef -i ru_RU -f KOI8-R ru_RU.KOI8-R
+          localedef -i ru_RU -f UTF-8 ru_RU.UTF-8
+          localedef -i se_NO -f UTF-8 se_NO.UTF-8
+          localedef -i ta_IN -f UTF-8 ta_IN.UTF-8
+          localedef -i tr_TR -f UTF-8 tr_TR.UTF-8
+          localedef -i zh_CN -f GB18030 zh_CN.GB18030
+          localedef -i zh_HK -f BIG5-HKSCS zh_HK.BIG5-HKSCS
+          localedef -i zh_TW -f UTF-8 zh_TW.UTF-8
+
+          printf \"%s\n\" \
+          \"# Begin /etc/nsswitch.conf\" \
+          \"\" \
+          \"passwd: files\" \
+          \"group: files\" \
+          \"shadow: files\" \
+          \"\" \
+          \"hosts: files dns\" \
+          \"networks: files\" \
+          \"\" \
+          \"protocols: files\" \
+          \"services: files\" \
+          \"ethers: files\" \
+          \"rpc: files\" \
+          \"\" \
+          \"# End /etc/nsswitch.conf\" \
+          > /etc/nsswitch.conf
+
+          tar -xf ../../tzdata2025a.tar.gz
+
+          ZONEINFO=/usr/share/zoneinfo
+          mkdir -pv $ZONEINFO/{posix,right}
+
+          for tz in etcetera southamerica northamerica europe africa antarctica  \
+              asia australasia backward; do
+              zic -L /dev/null   -d $ZONEINFO       ${tz}
+              zic -L /dev/null   -d $ZONEINFO/posix ${tz}
+              zic -L leapseconds -d $ZONEINFO/right ${tz}
+          done
+
+          cp -v zone.tab zone1970.tab iso3166.tab $ZONEINFO
+          zic -d $ZONEINFO -p America/New_York
+          unset ZONEINFO tz
+
+          echo \"# Begin /etc/ld.so.conf\" > /etc/ld.so.conf
+          echo \"/usr/local/lib\" >> /etc/ld.so.conf
+          echo \"/opt/lib\" >> /etc/ld.so.conf
+          "
+    - name: 0004 - Zlib (Basic System Software)
+      version: 1.3.1
+      archive_file: /sources/zlib-1.3.1.tar.gz
+      source_dir: /sources/zlib-1.3.1
+      exec_command: echo
+      description: |
+        Zlib is a compression library that provides functions for data compression and decompression. This job builds Zlib, which is essential for handling compressed data in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Zlib.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Zlib-1.3.1
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/zlib-1.3.1
+          ./configure --prefix=/usr
+          make check
+          make install
+          rm -fv /usr/lib/libz.a
+        '
+
+    - name: 0005 - Bzip2 (Basic System Software)
+      version: 1.0.8
+      archive_file: /sources/bzip2-1.0.8.tar.gz
+      source_dir: /sources/bzip2-1.0.8
+      exec_command: echo
+      build_tool: true
+      description: |
+        Bzip2 is a high-quality data compression program that is used to compress files and directories. This job builds Bzip2, which is essential for handling compressed files in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Bzip2.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Bzip2-1.0.8
+      build_command: |
+        curl -O https://linuxfromscratch.org/patches/downloads/bzip2/bzip2-1.0.8-install_docs-1.patch
+        {{ chroot_start_command }} -c '
+          cd /sources/bzip2-1.0.8
+          patch -Np1 -i bzip2-1.0.8-install_docs-1.patch
+          sed -i "s@\(ln -s -f \)$(PREFIX)/bin/@\1@" Makefile
+          sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
+          make -f Makefile-libbz2_so
+          make clean
+          make
+          make PREFIX=/usr install
+          cp -av libbz2.so.* /usr/lib
+          ln -sv libbz2.so.1.0.8 /usr/lib/libbz2.so
+          cp -v bzip2-shared /usr/bin/bzip2
+          for i in /usr/bin/{bzcat,bunzip2}; do
+            ln -sfv bzip2 $i
+          done
+          rm -fv /usr/lib/libbz2.a
+        '
+
+
+    - name: 0006 - Xz (Basic System Software)
+      version: 5.6.4
+      archive_file: /sources/xz-5.6.4.tar.xz
+      source_dir: /sources/xz-5.6.4
+      exec_command: echo
+      build_tool: true
+      description: |
+        Xz is a data compression tool that uses the LZMA algorithm for high compression ratios. This job builds Xz, which is essential for handling compressed files in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Xz.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Xz-5.6.4
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/xz-5.6.4
+          ./configure --prefix=/usr \
+                --disable-static \
+                --docdir=/usr/share/doc/xz-5.6.4
+          make
+          make check
+          make install
+          mv -v /usr/bin/xz /bin
+          mv -v /usr/lib/liblzma.so.* /lib
+          ln -svf ../../lib/$(readlink /usr/lib/liblzma.so) /usr/lib/liblzma.so
+        '
+
+    - name: 0007 - Lz4 (Basic System Software)
+      version: 1.10.0
+      archive_file: /sources/lz4-1.10.0.tar.gz
+      source_dir: /sources/lz4-1.10.0
+      exec_command: echo
+      build_tool: true
+      description: |
+        Lz4 is a fast compression algorithm that is designed for speed and efficiency. This job builds Lz4, which is essential for handling compressed data in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Lz4.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Lz4-1.10.0
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/lz4-1.10.0
+          make
+          make install
+        '
+
+    - name: 0008 - Zstd (Basic System Software)
+      version: 1.5.7
+      archive_file: /sources/zstd-1.5.7.tar.gz
+      source_dir: /sources/zstd-1.5.7
+      exec_command: echo
+      description: |
+        Zstd is a fast compression algorithm that provides high compression ratios. This job builds Zstd, which is essential for handling compressed data in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Zstd.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Zstd-1.5.7
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/zstd-1.5.7
+          make
+          make install
+        '
+
+    - name: 0009 - File (Basic System Software)
+      version: 5.46
+      archive_file: /sources/file-5.46.tar.gz
+      source_dir: /sources/file-5.46
+      exec_command: echo
+      description: |
+        File is a utility that determines the type of a file based on its content. This job builds File, which is essential for identifying file types in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building File.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/File-5.46
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/file-5.46
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0010 - Readline (Basic System Software)
+      version: 8.2.13
+      archive_file: /sources/readline-8.2.13.tar.gz
+      source_dir: /sources/readline-8.2.13  
+      exec_command: echo  
+      build_tool: true
+      description: |
+        Readline is a library that provides line-editing and history capabilities for interactive command-line applications. This job builds Readline, which is essential for command-line interfaces in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Readline.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Readline-8.2.13
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/readline-8.2.13
+          ./configure --prefix=/usr --disable-static --with-curses --docdir=/usr/share/doc/readline-8.2.13
+          make SHLIB_LIBS="-lncursesw"
+          make install
+          mv -v /usr/lib/lib{readline,history}.so.* /lib
+          ln -sfv ../../lib/$(readlink /usr/lib/libreadline.so) /usr/lib/libreadline.so
+          ln -sfv ../../lib/$(readlink /usr/lib/libhistory.so) /usr/lib/libhistory.so
+        '
+
+    - name: 0011 - M4 (Basic System Software)
+      version: 1.4.19
+      archive_file: /sources/m4-1.4.19.tar.xz
+      source_dir: /sources/m4-1.4.19
+      description: |
+        M4 is a macro processor that is used to generate text files based on templates. This job builds M4, which is essential for generating configuration files in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building M4.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/M4-1.4.19
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/m4-1.4.19
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0012 - Bc (Basic System Software)
+      version: 7.0.3
+      archive_file: /sources/bc-7.0.3.tar.xz
+      source_dir: /sources/bc-7.0.3
+      exec_command: echo
+      build_tool: true
+      description: |
+        Bc is an arbitrary precision calculator language that is used for performing mathematical calculations. This job builds Bc, which is essential for mathematical operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Bc.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Bc-7.0.3
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/bc-7.0.3
+          CC=gcc ./configure --prefix=/usr -G -O3 -r
+          make
+          make test
+          make install
+        '
+
+    - name: 0013 - Flex (Basic System Software)
+      version: 2.6.4
+      archive_file: /sources/flex-2.6.4.tar.gz
+      source_dir: /sources/flex-2.6.4
+      exec_command: echo
+      description: |
+        Flex is a fast lexical analyzer generator that is used to generate scanners for processing text. This job builds Flex, which is essential for parsing text in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Flex.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Flex-2.6.4
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/flex-2.6.4
+          ./configure --prefix=/usr --docdir=/usr/share/doc/flex-2.6.4
+          make
+          make install
+          if [ -L /usr/bin/lex ];then
+            unlink /usr/bin/lex
+          fi
+          ln -sv flex /usr/bin/lex
+        '
+
+    - name: 0014 - Tcl (Basic System Software)
+      version: 8.6.16
+      archive_file: /sources/tcl8.6.16-src.tar.gz
+      source_dir: /sources/tcl8.6.16
+      exec_command: echo
+      description: |
+        Tcl is a scripting language that is used for rapid prototyping, scripted applications, and GUIs. This job builds Tcl, which is essential for scripting in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Tcl.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Tcl-8.6.16
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/tcl8.6.16/unix
+          ./configure --prefix=/usr --mandir=/usr/share/man
+          make
+          make install
+          chmod -v u+w /usr/lib/libtcl8.6.so
+          make install-private-headers
+          ln -sfv tclsh8.6 /usr/bin/tclsh
+        '
+
+    - name: 0015 - Expect (Basic System Software)
+      version: 5.45.4
+      archive_file: /sources/expect5.45.4.tar.gz
+      source_dir: /sources/expect5.45.4
+      description: |
+        Expect is a program that automates interactions with applications that require user input. This job builds Expect, which is essential for automating tasks in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Expect.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Expect-5.45.4
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        curl -O https://www.linuxfromscratch.org/patches/lfs/12.3/expect-5.45.4-gcc14-1.patch 
+        {{ chroot_start_command }} -c '
+          cd /sources/expect5.45.4
+          python3 -c "from pty import spawn; spawn([\"echo\", \"ok\"])"
+          patch -Np1 -i expect-5.45.4-gcc14-1.patch
+
+          ./configure --prefix=/usr           \
+                      --with-tcl=/usr/lib     \
+                      --enable-shared         \
+                      --disable-rpath         \
+                      --mandir=/usr/share/man \
+                      --with-tclinclude=/usr/include
+          make
+          make test
+          make install
+          ln -svf expect5.45.4/libexpect5.45.4.so /usr/lib
+        '
+
+    - name: 0016 - DejaGNU (Basic System Software)
+      version: 1.6.3
+      archive_file: /sources/dejagnu-1.6.3.tar.gz
+      source_dir: /sources/dejagnu-1.6.3
+      description: |
+        DejaGNU is a framework for testing software that provides a consistent interface for running tests. This job builds DejaGNU, which is essential for testing software in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building DejaGNU.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/DejaGNU-1.6.3
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/dejagnu-1.6.3
+          ./configure --prefix=/usr
+          make install
+        '
+
+    - name: 0017 - Pkgconf (Basic System Software)
+      version: 2.3.0
+      archive_file: /sources/pkgconf-2.3.0.tar.xz
+      source_dir: /sources/pkgconf-2.3.0
+      exec_command: echo
+      description: |
+        Pkgconf is a tool that provides information about installed libraries and their dependencies. This job builds Pkgconf, which is essential for managing library dependencies in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Pkgconf.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Pkgconf-2.3.0
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/pkgconf-2.3.0
+          ./configure --prefix=/usr --disable-static
+          make
+          make install
+        '
+
+    - name: 0017A - pkg-config (Basic System Software)
+      version: 0.29.2
+      archive_file: /sources/pkg-config-0.29.2.tar.gz
+      source_dir: /sources/pkg-config-0.29.2
+      exec_command: echo
+      build_tool: true
+      description: |
+        Pkg-config is a helper tool used when compiling applications and libraries. It helps in managing compile and link flags for libraries. This job builds Pkg-config, which is essential for package management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Pkg-config.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Pkg-config-0.29.2
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/pkg-config-0.29.2
+          ./configure --prefix=/usr              \
+                      --with-internal-glib       \
+                      --disable-host-tool        \
+                      --docdir=/usr/share/doc/pkg-config-0.29.2
+          make
+          make check
+          make install
+        '
+
+    - name: 0018 - Binutils (Basic System Software)
+      version: 2.44
+      archive_file: /sources/binutils-2.44.tar.xz
+      source_dir: /sources/binutils-2.44
+      exec_command: echo
+      build_tool: true
+      description: |
+        Binutils is a collection of binary tools that are used for managing object files, libraries, and executables. This job builds Binutils, which is essential for compiling and linking programs in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Binutils.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Binutils-2.44
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/binutils-2.44
+          mkdir -v build
+          cd build
+          ../configure --prefix=/usr --enable-shared --enable-64-bit-bfd --enable-gprofng=no --disable-werror
+          make tooldir=/usr
+          make tooldir=/usr install
+          rm -fv /usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.a
+        '
+
+    - name: 0019 - GMP (Basic System Software)
+      version: 6.3.0
+      archive_file: /sources/gmp-6.3.0.tar.xz
+      source_dir: /sources/gmp-6.3.0
+      description: |
+        GMP (GNU Multiple Precision Arithmetic Library) is a library for arbitrary precision arithmetic, operating on signed integers, rational numbers, and floating-point numbers. This job builds GMP, which is essential for mathematical operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building GMP.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/GMP-6.3.0
+      build_tool: true
+      exec_command: echo
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gmp-6.3.0
+          ./configure --prefix=/usr --enable-cxx --disable-static --docdir=/usr/share/doc/gmp-6.3.0
+          make
+          make html
+          make install
+          make install-html
+        '
+
+    - name: 0020 - MPFR (Basic System Software)
+      version: 4.2.1
+      archive_file: /sources/mpfr-4.2.1.tar.xz
+      source_dir: /sources/mpfr-4.2.1
+      description: |
+        MPFR (Multiple Precision Floating-Point Reliable Library) is a library for multiple precision floating-point computations with correct rounding. This job builds MPFR, which is essential for high-precision arithmetic in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building MPFR.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/MPFR-4.2.1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/mpfr-4.2.1
+          ./configure --prefix=/usr --disable-static --with-gmp=/usr --docdir=/usr/share/doc/mpfr-4.2.1
+          make
+          make html
+          make install
+          make install-html
+        '
+
+    - name: 0021 - MPC (Basic System Software)
+      version: 1.3.1
+      archive_file: /sources/mpc-1.3.1.tar.gz
+      source_dir: /sources/mpc-1.3.1
+      exec_command: echo
+      build_tool: true
+      description: |
+        MPC (Multiple Precision Complex Library) is a library for multiple precision complex arithmetic. This job builds MPC, which is essential for complex arithmetic in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building MPC.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/MPC-1.3.1
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/mpc-1.3.1
+          ./configure --prefix=/usr --disable-static --docdir=/usr/share/doc/mpc-1.3.1
+          make
+          make html
+          make install
+          make install-html
+        '
+
+    - name: 0022 - Attr (Basic System Software)
+      version: 2.5.2
+      archive_file: /sources/attr-2.5.2.tar.gz
+      source_dir: /sources/attr-2.5.2
+      description: |
+        Attr is a library that provides support for extended attributes on filesystems. This job builds Attr, which is essential for managing file attributes in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Attr.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Attr-2.5.2
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/attr-2.5.2
+          ./configure --prefix=/usr --disable-static --sysconfdir=/etc
+          make
+          make install
+        '
+
+    - name: 0023 - Acl (Basic System Software)
+      version: 2.3.2
+      archive_file: /sources/acl-2.3.2.tar.xz
+      source_dir: /sources/acl-2.3.2
+      exec_command: echo
+      description: |
+        Acl (Access Control Lists) is a mechanism for defining more fine-grained permissions on files and directories. This job builds Acl, which is essential for managing file permissions in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Acl.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Acl-2.3.2
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/acl-2.3.2
+          ./configure --prefix=/usr --disable-static --docdir=/usr/share/doc/acl-2.3.2
+          make
+          make install
+        '
+
+    - name: 0024 - Libcap (Basic System Software)
+      version: 2.73
+      archive_file: /sources/libcap-2.73.tar.xz
+      source_dir: /sources/libcap-2.73
+      exec_command: echo
+      build_tool: true
+      description: |
+        Libcap is a library that provides an interface for getting and setting POSIX capabilities. This job builds Libcap, which is essential for managing capabilities in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libcap.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libcap-2.73
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libcap-2.73
+          make lib=lib
+          make lib=lib install
+        '
+
+    - name: 0025 - Libxcrypt-4.4.38 (Basic System Software)
+      version: 4.4.38
+      archive_file: /sources/libxcrypt-4.4.38.tar.xz
+      source_dir: /sources/libxcrypt-4.4.38
+      exec_command: echo
+      description: |
+        Libxcrypt is a library that provides functions for password hashing and encryption. This job builds Libxcrypt, which is essential for secure password handling in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libxcrypt.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libxcrypt-4.4.38
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libxcrypt-4.4.38
+          ./configure --prefix=/usr --disable-static --enable-hashes=strong --enable-obsolete-api=no --disable-failure-tokens
+          make
+          make install
+        '
+
+    - name: 0026 - Shadow (Basic System Software)
+      version: 4.17.3
+      archive_file: /sources/shadow-4.17.3.tar.xz
+      source_dir: /sources/shadow-4.17.3
+      exec_command: echo
+      description: |
+        Shadow is a suite of utilities for managing user accounts and passwords in Unix-like operating systems. This job builds Shadow, which is essential for user management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Shadow.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Shadow-4.17.3
+      build_tool: true
+      build_command: |
+        cp /mnt/lfs/sources/shadow-4.17.3.sh /mnt/lfs/sources/shadow-4.17.3/
+
+        {{ chroot_start_command }} -c '
+          cd /sources/shadow-4.17.3
+          ./shadow-4.17.3.sh
+        '
+
+    - name: 0027 - GCC (Basic System Software)
+      version: 14.2.0
+      archive_file: /sources/gcc-14.2.0.tar.xz
+      source_dir: /sources/gcc-14.2.0
+      description: |
+        GCC (GNU Compiler Collection) is a compiler system that supports various programming languages. This job builds GCC, which is essential for compiling software in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building GCC.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/GCC-14.2.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gcc-14.2.0
+          tar -xf ../mpfr-4.2.1.tar.xz
+          mv -v mpfr-4.2.1 mpfr
+          tar -xf ../gmp-6.3.0.tar.xz
+          mv -v gmp-6.3.0 gmp
+          tar -xf ../mpc-1.3.1.tar.gz
+          mv -v mpc-1.3.1 mpc
+          case $(uname -m) in
+            x86_64)
+              sed -e "/m64=/s/lib64/lib/" \
+                  -i.orig gcc/config/i386/t-linux64
+            ;;
+          esac
+          mkdir -v build
+          cd       build
+          ../configure --prefix=/usr           \
+                      LD=ld                    \
+                      --enable-languages=c,c++ \
+                      --enable-default-pie     \
+                      --enable-default-ssp     \
+                      --enable-host-pie        \
+                      --disable-multilib       \
+                      --disable-bootstrap      \
+                      --disable-fixincludes    \
+                      --with-system-zlib
+          make
+          make install
+          chown -v -R root:root \
+          /usr/lib/gcc/$(gcc -dumpmachine)/14.2.0/include{,-fixed}
+          ln -svr /usr/bin/cpp /usr/lib || echo "Linking cpp failed, continuing anyway"
+          ln -sv gcc.1 /usr/share/man/man1/cc.1 || echo "Linking cc failed, continuing anyway"
+          ln -sfv ../../libexec/gcc/$(gcc -dumpmachine)/14.2.0/liblto_plugin.so \
+                  /usr/lib/bfd-plugins || echo "Linking liblto_plugin.so failed, continuing anyway"
+
+        '
+
+    - name: 0028 - Ncurses (Basic System Software)
+      version: 6.5
+      archive_file: /sources/ncurses-6.5.tar.gz
+      source_dir: /sources/ncurses-6.5
+      description: |
+        Ncurses is a library that provides functions for writing text-based user interfaces in a terminal. This job builds Ncurses, which is essential for terminal-based applications in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Ncurses.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Ncurses-6.5
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/ncurses-6.5
+          ./configure --prefix=/usr --mandir=/usr/share/man --with-shared --with-termlib --without-debug --without-ada --enable-widec --enable-pc-files --with-pkg-config-libdir=/usr/lib/pkgconfig
+
+          make
+          make install
+          mv -v /usr/lib/libncursesw.so.* /lib
+          ln -sfv ../../lib/$(readlink /usr/lib/libncursesw.so) /usr/lib/libncursesw.so
+          for lib in ncurses form panel menu ; do
+          rm -vf /usr/lib/lib${lib}.so
+          echo "INPUT(-l${lib}w)" > /usr/lib/lib${lib}.so
+          ln -sfv lib${lib}w.a /usr/lib/lib${lib}.a
+          done
+          ln -sfv libncurses++w.a /usr/lib/libncurses++.a
+          rm -vf /usr/lib/libcursesw.so
+          echo "INPUT(-lncursesw)" > /usr/lib/libcursesw.so
+          ln -sfv libncurses.so /usr/lib/libcurses.so
+          mkdir -pv /usr/share/doc/ncurses-6.5
+          cp -v -R doc/* /usr/share/doc/ncurses-6.5
+
+          # TODO: Undestand better why this is needed for aarch64
+          if [ "$(uname -m)" = "aarch64" ]; then
+            cd /usr/lib
+            if [ ! -e libtinfo.so.6 ]; then
+              ln -sv libtinfow.so.6 libtinfo.so.6
+            fi
+
+            if [ ! -e libtinfo.so ]; then
+              ln -sv libtinfow.so libtinfo.so
+            fi    
+          fi
+
+        '
+
+    - name: 0029 - Sed (Basic System Software)
+      version: 4.9
+      archive_file: /sources/sed-4.9.tar.xz
+      source_dir: /sources/sed-4.9
+      description: |
+        Sed is a stream editor that is used for parsing and transforming text. This job builds Sed, which is essential for text processing in the LFS environment
+      category:
+        This job is part of the basic system software setup, specifically for building Sed.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Sed-4.9
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/sed-4.9
+          ./configure --prefix=/usr
+          make
+          make html
+          make install
+          make install
+          install -d -m755           /usr/share/doc/sed-4.9
+          install -m644 doc/sed.html /usr/share/doc/sed-4.9
+        '
+
+    - name: 0030 - Psmisc (Basic System Software)
+      version: 23.7
+      archive_file: /sources/psmisc-23.7.tar.xz
+      source_dir: /sources/psmisc-23.7
+      description: |
+        Psmisc is a collection of utilities for managing processes in Unix-like operating systems. This job builds Psmisc, which is essential for process management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Psmisc.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Psmisc-23.7
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/psmisc-23.7
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0031 - Gettext (Basic System Software)
+      version: 0.24
+      archive_file: /sources/gettext-0.24.tar.xz
+      source_dir: /sources/gettext-0.24
+      description: |
+        Gettext is a tool for internationalization and localization of software. This job builds Gettext, which is essential for supporting multiple languages in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Gettext.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Gettext-0.24
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gettext-0.24
+          
+          if [ "$(uname -m)" = "aarch64" ]; then
+            make clean
+            ./configure --disable-shared --build=aarch64-unknown-linux-gnu --host=x86_64-pc-linux-gnu
+            make
+          else
+            ./configure --disable-shared
+          fi
+          
+          make
+          cp -v gettext-tools/src/{msgfmt,msgmerge,xgettext} /usr/bin
+
+        '
+
+    - name: 0032 - Bison (Basic System Software)
+      version: 3.8.2
+      archive_file: /sources/bison-3.8.2.tar.xz
+      source_dir: /sources/bison-3.8.2
+      description: |
+        Bison is a parser generator that is used to generate parsers for programming languages. This job builds Bison, which is essential for parsing in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Bison.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Bison-3.8.2
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/bison-3.8.2
+          ./configure --prefix=/usr --docdir=/usr/share/doc/bison-3.8.2
+          make
+          make install
+        '
+
+    - name: 0033 - Grep (Basic System Software)
+      version: 3.11
+      archive_file: /sources/grep-3.11.tar.xz
+      source_dir: /sources/grep-3.11
+      description: |
+        Grep is a command-line utility for searching plain-text data for lines that match a regular expression. This job builds Grep, which is essential for text searching in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Grep.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Grep-3.11
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/grep-3.11
+          sed -i "s/echo/#echo/" src/egrep.sh
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0034 - Bash-5.2.37 (Basic System Software)
+      version: 5.2.37
+      archive_file: /sources/bash-5.2.37.tar.gz
+      source_dir: /sources/bash-5.2.37
+      exec_command: echo
+      description: |
+        Bash is a Unix shell and command language that is widely used as the default shell in many Linux distributions. This job builds Bash, which is essential for command-line operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Bash.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Bash-5.2.37
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/bash-5.2.37
+          ./configure --prefix=/usr --docdir=/usr/share/doc/bash-5.2.37 --without-bash-malloc --with-installed-readline
+          make
+          make install
+          if [ -f /bin/sh ]; then
+            rm -vf /bin/sh
+          fi
+          ln -sv bash /bin/sh
+        '
+
+    - name: 0035 - Libtool (Basic System Software)
+      version: 2.5.4
+      archive_file: /sources/libtool-2.5.4.tar.xz
+      source_dir: /sources/libtool-2.5.4
+      exec_command: echo
+      description: |
+        Libtool is a generic library support script that abstracts the complexity of using shared libraries across different platforms. This job builds Libtool, which is essential for managing shared libraries in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libtool.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libtool-2.5.4
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libtool-2.5.4
+          ./configure --prefix=/usr M4=/usr/bin/m4
+          make
+          make install
+        '
+
+    - name: 0036 - GDBM (Basic System Software)
+      version: 1.24
+      archive_file: /sources/gdbm-1.24.tar.gz
+      source_dir: /sources/gdbm-1.24
+      exec_command: echo
+      description: |
+        GDBM (GNU Database Manager) is a library for managing databases using key-value pairs. This job builds GDBM, which is essential for database management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building GDBM.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/GDBM-1.24
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gdbm-1.24
+          ./configure --prefix=/usr --disable-static --enable-libgdbm-compat --docdir=/usr/share/doc/gdbm-1.24
+          make
+          make install
+        '
+
+    - name: 0037 - Gperf (Basic System Software)
+      version: 3.1
+      archive_file: /sources/gperf-3.1.tar.gz
+      source_dir: /sources/gperf-3.1
+      exec_command: echo
+      description: |
+        Gperf is a perfect hash function generator that is used to generate hash tables for fast lookups. This job builds Gperf, which is essential for efficient data retrieval in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Gperf.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Gperf-3.1
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gperf-3.1
+          ./configure --prefix=/usr --docdir=/usr/share/doc/gperf-3.1
+          make
+          make install
+        '
+
+    - name: 0038 - Expat (Basic System Software)
+      version: 2.7.1
+      archive_file: /sources/expat-2.7.1.tar.xz
+      source_dir: /sources/expat-2.7.1
+      exec_command: echo
+      description: |
+        Expat is an XML parser library that is used for parsing XML documents. This job builds Expat, which is essential for XML processing in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Expat.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Expat-2.7.1
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/expat-2.7.1
+          ./configure --prefix=/usr    \
+                      --disable-static \
+                      --docdir=/usr/share/doc/expat-2.7.1
+          make
+          make check
+          make install
+          install -v -m644 doc/*.{html,css} /usr/share/doc/expat-2.7.1
+        '
+
+    - name: 0039 - Inetutils (Basic System Software)
+      version: 2.6
+      archive_file: /sources/inetutils-2.6.tar.xz
+      source_dir: /sources/inetutils-2.6
+      exec_command: echo
+      description: |
+        Inetutils is a collection of common network programs such as FTP, Telnet, and others. This job builds Inetutils, which is essential for network communication in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Inetutils.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Inetutils-2.6
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/inetutils-2.6
+          CFLAGS='-Wno-error=implicit-function-declaration -DPATH_PROCNET_DEV=\"/proc/net/dev\"' ./configure --prefix=/usr --localstatedir=/var --disable-logger --disable-whois --disable-rcp --disable-rexec --disable-rlogin --disable-rsh --disable-servers
+          make
+          make install
+        '
+
+    - name: 0040 - Less (Basic System Software)
+      version: 668
+      archive_file: /sources/less-668.tar.gz
+      source_dir: /sources/less-668
+      exec_command: echo
+      description: |
+        Less is a terminal pager program used to view the content of files one screen at a time. This job builds Less, which is essential for file viewing in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Less.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Less-668
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/less-668
+          ./configure --prefix=/usr --sysconfdir=/etc
+          make
+          make install
+        '
+
+    - name: 0041 - Perl (Basic System Software)
+      version: 5.40.1
+      archive_file: /sources/perl-5.40.1.tar.xz
+      source_dir: /sources/perl-5.40.1
+      exec_command: echo
+      description: |
+        Perl is a high-level, general-purpose programming language known for its text processing capabilities. This job builds Perl, which is essential for scripting and automation in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Perl.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Perl-5.40.1
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/perl-5.40.1
+          sh Configure -des -Dprefix=/usr -Dvendorprefix=/usr -Duseshrplib -Dprivlib=/usr/lib/perl5/5.40/core_perl -Darchlib=/usr/lib/perl5/5.40/core_perl -Dsitelib=/usr/lib/perl5/5.40/site_perl -Dsitearch=/usr/lib/perl5/5.40/site_perl -Dvendorlib=/usr/lib/perl5/5.40/vendor_perl -Dvendorarch=/usr/lib/perl5/5.40/vendor_perl
+          make
+          make install
+        '
+
+    - name: 0042 - XML Parser (Basic System Software)
+      version: 2.47
+      archive_file: /sources/XML-Parser-2.47.tar.gz
+      source_dir: /sources/XML-Parser-2.47
+      exec_command: echo
+      description: |
+        XML::Parser is a Perl module for parsing XML documents. This job builds XML::Parser, which is essential for XML processing in Perl scripts in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building XML::Parser.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/XML_Parser-2.47
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/XML-Parser-2.47
+          perl Makefile.PL
+          make
+          make test
+          make install
+        '
+
+    - name: 0043 - Intltool (Basic System Software)
+      version: 0.51.0
+      archive_file: /sources/intltool-0.51.0.tar.gz
+      source_dir: /sources/intltool-0.51.0
+      description: |
+        Intltool is a set of tools for internationalizing software. This job builds Intltool, which is essential for managing translations and localization in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Intltool.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Intltool-0.51.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/intltool-0.51.0
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0044 - Autoconf (Basic System Software)
+      version: 2.72
+      archive_file: /sources/autoconf-2.72.tar.xz
+      source_dir: /sources/autoconf-2.72
+      description: |
+        Autoconf is a tool for producing shell scripts that automatically configure software source code packages to adapt to various types of Unix-like systems. This job builds Autoconf, which is essential for building and installing software in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Autoconf.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Autoconf-2.72
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/autoconf-2.72
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0045 - Automake (Basic System Software)
+      version: 1.17
+      archive_file: /sources/automake-1.17.tar.xz
+      source_dir: /sources/automake-1.17
+      description: |
+        Automake is a tool for automatically generating Makefile.in files compliant with the GNU Coding Standards. This job builds Automake, which is essential for building and installing software in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Automake.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Automake-1.17  
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/automake-1.17
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0046 - OpenSSL (Basic System Software)
+      version: 3.4.1
+      archive_file: /sources/openssl-3.4.1.tar.gz
+      source_dir: /sources/openssl-3.4.1
+      description: |
+        OpenSSL is a software library for applications that secure communications over computer networks against eavesdropping or need to identify the party at the other end. This job builds OpenSSL, which is essential for secure communications in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building OpenSSL.
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/openssl-3.4.1
+          ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib shared zlib-dynamic
+          make
+          make install
+        '
+
+    - name: 0047 - Libelf (Basic System Software)
+      version: 0.192
+      archive_file: /sources/elfutils-0.192.tar.bz2
+      source_dir: /sources/elfutils-0.192
+      description: |
+        Libelf is a library for handling ELF (Executable and Linkable Format) files. This job builds Libelf from the Elfutils package, which is essential for working with ELF files in the LFS environment. 
+      category:
+        This job is part of the basic system software setup, specifically for building Libelf from Elfutils.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libelf-from-Elfutils-0.192
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/elfutils-0.192
+          ./configure --prefix=/usr                \
+                      --disable-debuginfod         \
+                      --enable-libdebuginfod=dummy
+
+          make 
+          make check
+          make -C libelf install
+          install -vm644 config/libelf.pc /usr/lib/pkgconfig
+          rm /usr/lib/libelf.a
+        '
+
+    - name: 0048 - Libffi (Basic System Software)
+      version: 3.4.7
+      archive_file: /sources/libffi-3.4.7.tar.gz
+      source_dir: /sources/libffi-3.4.7
+      exec_command: echo
+      description: |
+        Libffi is a foreign function interface library that provides a portable, high-level programming interface to various calling conventions. This job builds Libffi, which is essential for calling functions in shared libraries from other languages in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libffi.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libffi-3.4.7
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libffi-3.4.7
+          ./configure --prefix=/usr --disable-static --with-gcc-arch=native --disable-exec-static-tramp
+          make
+          make install
+        '
+
+    - name: 0049 - Python (Basic System Software)
+      version: 3.13.2
+      archive_file: /sources/Python-3.13.2.tar.xz
+      source_dir: /sources/Python-3.13.2
+      exec_command: echo
+      build_tool: true
+      description: |
+        Python is a high-level, interpreted programming language known for its readability and versatility. This job builds Python, which is essential for scripting and automation in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Python.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Python-3.13.2
+      # Ensure zlib is built before Python, as Python depends on it
+      build_command: |
+        {{ chroot_start_command }} -c '
+          if ! ldconfig -p | grep -q libz; then
+            echo "Error: zlib is not present. Please build zlib before proceeding."
+            exit 1
+          fi
+          cd /sources/Python-3.13.2
+          ./configure --prefix=/usr --enable-shared --with-system-expat --with-system-ffi --enable-optimizations
+          make clean
+          make
+          make install
+          echo "[global]" > /etc/pip.conf
+          echo "root-user-action = ignore" >> /etc/pip.conf
+          echo "disable-pip-version-check = true" >> /etc/pip.conf
+
+          if [ "$(uname -m)" = "x86_64" ]; then
+            echo "Running on AMD64 architecture."
+            python3 -c "import zlib; print(zlib.compress(b'test'))"
+            if ! command -v pip3; then
+              echo "Error: pip3 is not installed. Please install pip3 before proceeding."
+              exit 1
+            fi
+          else
+            echo "Not running on AMD64 architecture."
+            exit 1
+          fi
+          python3 -m ensurepip --upgrade
+        '
+
+    - name: 0050 - Flit-Core (Basic System Software)
+      version: 3.11.0
+      archive_file: /sources/flit_core-3.11.0.tar.gz
+      source_dir: /sources/flit_core-3.11.0
+      description: |
+        Flit-Core is a simple build system for Python packages. This job builds Flit-Core, which is essential for packaging Python projects in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Flit-Core.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Flit-Core-3.11.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/flit_core-3.11.0
+          python3 -m pip install .
+        '
+
+    - name: 0051 - Wheel (Basic System Software)
+      version: 0.45.1
+      archive_file: /sources/wheel-0.45.1.tar.gz
+      description: |
+        Wheel is a built-package format for Python that helps in distributing and installing Python packages. This job builds Wheel, which is essential for packaging Python projects in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Wheel.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Wheel-0.45.1
+      source_dir: /sources/wheel-0.45.1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/wheel-0.45.1
+          pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps $PWD
+          pip3 install --no-index --find-links dist wheel
+        '
+
+    - name: 0052 - Setuptools (Basic System Software)
+      version: 75.8.1
+      archive_file: /sources/setuptools-75.8.1.tar.gz
+      source_dir: /sources/setuptools-75.8.1
+      description: |
+        Setuptools is a package development and distribution tool for Python. This job builds Setuptools, which is essential for managing Python packages in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Setuptools.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Setuptools-75.8.1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/setuptools-75.8.1
+          python3 -m pip install .
+        '
+
+    - name: 0053 - Ninja (Basic System Software)
+      version: 1.12.1
+      archive_file: /sources/ninja-1.12.1.tar.gz
+      source_dir: /sources/ninja-1.12.1
+      description: |
+        Ninja is a small build system with a focus on speed. This job builds Ninja, which is essential for building software in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Ninja.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Ninja-1.12.1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/ninja-1.12.1
+          ./configure.py --bootstrap
+          install -vm755 ninja /usr/bin/
+        '
+
+    - name: 0054 - Meson (Basic System Software)
+      version: 1.7.0
+      archive_file: /sources/meson-1.7.0.tar.gz
+      source_dir: /sources/meson-1.7.0
+      description: |
+        Meson is a build system that is designed to be fast and user-friendly. This job builds Meson, which is essential for building software in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Meson.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Meson-1.7.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/meson-1.7.0
+          pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps $PWD
+          pip3 install --no-index --find-links dist meson
+          install -vDm644 data/shell-completions/bash/meson /usr/share/bash-completion/completions/meson
+          install -vDm644 data/shell-completions/zsh/_meson /usr/share/zsh/site-functions/_meson
+
+          if ! find /usr -name meson -type f -executable | grep -q meson; then
+            echo "Meson executable not found in /usr.. force with pip install"
+            python3 -m pip install --no-index --find-links=dist --force-reinstall meson
+          fi
+        '
+
+    - name: 0055 - Kmod (Basic System Software)
+      version: 34
+      archive_file: /sources/kmod-34.tar.xz
+      source_dir: /sources/kmod-34
+      description: |
+        Kmod is a utility for managing Linux kernel modules. This job builds Kmod, which is essential for loading and unloading kernel modules in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Kmod.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Kmod-34
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/kmod-34
+          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
+          mkdir -p build
+          cd       build
+
+          meson setup --prefix=/usr ..    \
+                      --sbindir=/usr/sbin \
+                      --buildtype=release \
+                      -D manpages=false
+
+          ninja
+          ninja install
+        '
+
+    - name: 0056 - Coreutils (Basic System Software)
+      version: 9.6
+      archive_file: /sources/coreutils-9.6.tar.xz
+      source_dir: /sources/coreutils-9.6
+      exec_command: echo
+      build_tool: true
+      description: |
+        Coreutils is a package that contains the basic file, shell, and text manipulation utilities of the GNU operating system. This job builds Coreutils, which is essential for basic system operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Coreutils.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Coreutils-9.6
+      build_command: |
+
+        curl -O https://www.linuxfromscratch.org/patches/downloads/coreutils/coreutils-9.6-i18n-1.patch
+
+        {{ chroot_start_command }} -c '
+          cd /sources/coreutils-9.6
+          patch -Np1 -i coreutils-9.6-i18n-1.patch
+
+          autoreconf -fv
+          automake -af
+          FORCE_UNSAFE_CONFIGURE=1 ./configure \
+                      --prefix=/usr            \
+                      --enable-no-install-program=kill,uptime
+          make
+          make NON_ROOT_USERNAME=tester check-root
+          make install
+          mv -v /usr/bin/chroot /usr/sbin
+          mv -v /usr/share/man/man1/chroot.1 /usr/share/man/man8/chroot.8
+          sed -i 's/"1"/"8"/' /usr/share/man/man8/chroot.8
+          '
+
+    - name: 0057 - Check (Basic System Software)
+      version: 0.15.2
+      archive_file: /sources/check-0.15.2.tar.gz
+      source_dir: /sources/check-0.15.2
+      description: |
+        Check is a unit testing framework for C. This job builds Check, which is essential for testing C programs in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Check.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Check-0.15.2
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/check-0.15.2
+          ./configure --prefix=/usr --disable-static
+          make
+          make install
+        '
+
+    - name: 0058 - Diffutils (Basic System Software)
+      version: 3.11
+      source_dir: /sources/diffutils-3.11
+      exec_command: echo
+      description: |
+        Diffutils is a package that contains the diff, cmp, comm, and sdiff utilities for comparing files. This job builds Diffutils, which is essential for file comparison in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Diffutils.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Diffutils-3.11
+      build_tool: true
+      archive_file: /sources/diffutils-3.11.tar.xz
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/diffutils-3.11
+          ./configure --prefix=/usr
+          make clean
+          make
+          make install
+        '
+
+    - name: 0059 - Gawk (Basic System Software)
+      version: 5.3.1
+      archive_file: /sources/gawk-5.3.1.tar.xz
+      source_dir: /sources/gawk-5.3.1
+      exec_command: echo
+      build_tool: true
+      description: |
+        Gawk is the GNU implementation of the AWK programming language, which is used for pattern scanning and processing. This job builds Gawk, which is essential for text processing in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Gawk.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Gawk-5.3.1
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gawk-5.3.1
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0060 - Findutils (Basic System Software)
+      version: 4.10.0
+      archive_file: /sources/findutils-4.10.0.tar.xz
+      source_dir: /sources/findutils-4.10.0
+      description: |
+        Findutils is a package that contains the find, locate, updatedb, and xargs utilities for searching files in a directory hierarchy. This job builds Findutils, which is essential for file searching in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Findutils.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Findutils-4.10.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/findutils-4.10.0
+          ./configure --prefix=/usr --localstatedir=/var/lib/locate
+          make clean
+          make
+          make install
+        '
+
+    - name: 0061 - Groff (Basic System Software)
+      version: 1.23.0
+      archive_file: /sources/groff-1.23.0.tar.gz
+      source_dir: /sources/groff-1.23.0
+      description: |
+        Groff is a typesetting system that reads plain text mixed with formatting commands and produces formatted output. This job builds Groff, which is essential for document formatting in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Groff.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Groff-1.23.0
+      # Ensure groff is built after findutils, as it depends on it
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/groff-1.23.0
+          PAGE=A4 ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0062 - GRUB (Basic System Software)
+      version: 2.12
+      archive_file: /sources/grub-2.12.tar.xz
+      source_dir: /sources/grub-2.12
+      description: |
+        GRUB (GRand Unified Bootloader) is a bootloader package that supports multiple operating systems. This job builds GRUB, which is essential for booting the LFS system.
+      category:
+        This job is part of the basic system software setup, specifically for building GRUB.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/GRUB-2.12
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/grub-2.12
+          echo depends bli part_gpt > grub-core/extra_deps.lst
+          ./configure --prefix=/usr          \
+                      --sysconfdir=/etc      \
+                      --disable-efiemu       \
+                      --disable-werror
+          make
+          make install
+          make install
+          mv -v /etc/bash_completion.d/grub /usr/share/bash-completion/completions
+        '
+
+    - name: 0063 - Gzip (Basic System Software)
+      version: 1.13
+      archive_file: /sources/gzip-1.13.tar.xz
+      source_dir: /sources/gzip-1.13
+      description: |
+        Gzip is a file compression utility that reduces the size of files. This job builds Gzip, which is essential for file compression in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Gzip.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Gzip-1.13
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gzip-1.13
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0064 - IPRoute2 (Basic System Software)
+      version: 6.13.0
+      archive_file: /sources/iproute2-6.13.0.tar.xz
+      source_dir: /sources/iproute2-6.13.0
+      description: |
+        IPRoute2 is a collection of utilities for controlling TCP/IP networking and traffic control in Linux. This job builds IPRoute2, which is essential for network management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building IPRoute2.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/IPRoute2-6.13.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/iproute2-6.13.0
+          ./configure
+          make
+          make install
+        '
+
+    - name: 0065 - Kbd (Basic System Software)
+      version: 2.7.1
+      archive_file: /sources/kbd-2.7.1.tar.xz
+      source_dir: /sources/kbd-2.7.1
+      description: |
+        Kbd is a package that contains the keyboard utilities for Linux, including loadkeys and setfont. This job builds Kbd, which is essential for keyboard configuration in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Kbd.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Kbd-2.7.1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/kbd-2.7.1
+          ./configure --prefix=/usr --disable-vlock --disable-static --docdir=/usr/share/doc/kbd-2.7.1
+          make
+          make install
+        '
+
+    - name: 0066 - Libpipeline (Basic System Software)
+      version: 1.5.8
+      archive_file: /sources/libpipeline-1.5.8.tar.gz
+      source_dir: /sources/libpipeline-1.5.8
+      description: |
+        Libpipeline is a library for manipulating pipelines of subprocesses in C. This job builds Libpipeline, which is essential for process management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libpipeline.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libpipeline-1.5.8
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libpipeline-1.5.8
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0067 - Make (Basic System Software)
+      version: 4.4.1
+      archive_file: /sources/make-4.4.1.tar.gz
+      source_dir: /sources/make-4.4.1
+      description: |
+        Make is a build automation tool that automatically builds executable programs and libraries from source code by reading files called Makefiles. This job builds Make, which is essential for building software in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Make.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Make-4.4.1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/make-4.4.1
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0068 - Patch (Basic System Software)
+      version: 2.7.6
+      archive_file: /sources/patch-2.7.6.tar.xz
+      source_dir: /sources/patch-2.7.6
+      description: |
+        Patch is a utility that applies changes to files based on a diff file. This job builds Patch, which is essential for applying patches in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Patch.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Patch-2.7.6
+      # Ensure patch is built after make, as it depends on it
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        rm -rf /mnt/lfs/sources/patch-2.7.6 || echo "Removing patch-2.7.6 directory failed, continuing anyway"
+        cd /mnt/lfs/sources
+        tar -xf /mnt/lfs/sources/patch-2.7.6.tar.xz
+        {{ chroot_start_command }} -c '
+          cd /sources/patch-2.7.6
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0069 - Tar (Basic System Software)
+      version: 1.35
+      archive_file: /sources/tar-1.35.tar.xz
+      description: |
+        Tar is a utility for creating and extracting archive files. This job builds Tar, which is essential for file archiving in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Tar.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Tar-1.35
+      source_dir: /sources/tar-1.35
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/tar-1.35
+          FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr --bindir=/bin
+          make
+          make install
+        '
+
+    - name: 0070 - Texinfo (Basic System Software)
+      version: 7.2
+      archive_file: /sources/texinfo-7.2.tar.xz
+      source_dir: /sources/texinfo-7.2
+      description: |
+        Texinfo is a documentation system that uses a single source file to produce both online and printed documentation. This job builds Texinfo, which is essential for managing documentation in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Texinfo.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Texinfo-7.2
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/texinfo-7.2
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0071 - Vim (Basic System Software)
+      version: 9.1.1166
+      archive_file: /sources/vim-9.1.1166.tar.gz
+      source_dir: /sources/vim-9.1.1166
+      description: |
+        Vim is a highly configurable text editor built to enable efficient text editing. This job builds Vim, which is essential for text editing in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Vim.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Vim-9.1.1166
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/vim-9.1.1166
+          ./configure --prefix=/usr --enable-multibyte
+          make
+          make install
+        '
+
+    - name: 0072 - MarkupSafe (Basic System Software)
+      version: 3.0.2
+      archive_file: /sources/markupsafe-3.0.2.tar.gz
+      source_dir: /sources/markupsafe-3.0.2
+      description: |
+        MarkupSafe is a library for safely handling strings that may contain HTML or XML markup. This job builds MarkupSafe, which is essential for web development in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building MarkupSafe.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/MarkupSafe-3.0.2
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/markupsafe-3.0.2
+          pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps $PWD
+          pip3 install --no-index --find-links dist Markupsafe
+        '
+
+    - name: 0073 - Jinja2 (Basic System Software)
+      version: 3.1.5
+      archive_file: /sources/jinja2-3.1.5.tar.gz
+      source_dir: /sources/jinja2-3.1.5
+      description: |
+        Jinja2 is a templating engine for Python that allows for dynamic HTML generation. This job builds Jinja2, which is essential for web development in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Jinja2.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Jinja2-3.1.5
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/jinja2-3.1.5
+          pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps $PWD
+          pip3 install --no-index --find-links dist Jinja2
+        '
+
+    - name: 0074 - Udev from Systemd (Basic System Software)
+      version: 257.3
+      archive_file: /sources/systemd-257.3.tar.gz
+      source_dir: /sources/systemd-257.3
+      description: |
+        Udev is a device manager for the Linux kernel that manages device nodes in the /dev directory. This job builds Udev from Systemd, which is essential for managing devices in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Udev from Systemd.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Udev-from-Systemd-257.3
+      exec_command: echo
+      build_tool: true
+      build_command: |
+
+        if ! mountpoint -q $LFS/dev; then
+          sudo mount -v --bind /dev $LFS/dev
+        fi
+
+        if ! mountpoint -q $LFS/dev/pts; then
+          sudo mount -vt devpts devpts -o gid=5,mode=0620 $LFS/dev/pts
+        fi
+
+        if ! mountpoint -q $LFS/proc; then
+          sudo mount -vt proc proc $LFS/proc
+        fi
+
+        if ! mountpoint -q $LFS/sys; then
+          sudo mount -vt sysfs sysfs $LFS/sys
+        fi
+
+        if ! mountpoint -q $LFS/run; then
+          sudo mount -vt tmpfs tmpfs $LFS/run
+        fi
+
+        cd /mnt/lfs/sources
+        sudo rm -rf /mnt/lfs/sources/systemd-257.3 || echo "Removing systemd-257.3 directory failed, continuing anyway"
+        tar -xvf /mnt/lfs/sources/systemd-257.3.tar.gz
+        cp /mnt/lfs/sources/udev_systemd-257.3.sh /mnt/lfs/sources/systemd-257.3/udev_systemd-257.3.sh 
+        {{ chroot_start_command }} -c '
+          cd /sources/systemd-257.3
+          ./udev_systemd-257.3.sh 
+        '
+
+    - name: 0075 - Man-DB (Basic System Software)
+      version: 2.13.0
+      archive_file: /sources/man-db-2.13.0.tar.xz
+      source_dir: /sources/man-db-2.13.0
+      exec_command: echo
+      description: |
+        Man-DB-2.13.0 is a version of the manual page database software used to manage and query Unix manual pages. It provides tools for indexing, searching, and displaying man pages, which are essential for accessing documentation about Unix commands, system calls, and libraries.
+      category:
+        This job is part of the basic system software setup, specifically for building
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/job/Man-DB-2.13.0%20(Basic%20System%20Software)/
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/man-db-2.13.0
+          ./configure --prefix=/usr --docdir=/usr/share/doc/man-db-2.13.0 --sysconfdir=/etc --disable-setuid --enable-cache-owner=bin --with-browser=/usr/bin/lynx --with-vgrind=/usr/bin/vgrind --with-grap=/usr/bin/grap --with-systemdtmpfilesdir=
+          make
+          make install
+        '
+
+    - name: 0076 - Procps-ng (Basic System Software)
+      version: 4.0.5
+      archive_file: /sources/procps-ng-4.0.5.tar.xz
+      source_dir: /sources/procps-ng-4.0.5
+      description: |
+        Procps-ng is a package that contains utilities for monitoring and managing processes in Linux. This job builds Procps-ng, which is essential for process management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Procps-ng.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Procps-ng-4.0.5
+      # Ensure procps-ng is built after
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/procps-ng-4.0.5
+          ./configure --prefix=/usr --docdir=/usr/share/doc/procps-ng-4.0.5 --disable-static --disable-kill
+          make
+          make install
+        '
+
+    - name: 0077 - Util-linux (Basic System Software)
+      version: 2.40.4
+      archive_file: /sources/util-linux-2.40.4.tar.xz
+      source_dir: /sources/util-linux-2.40.4
+      exec_command: echo
+      description: |
+        Util-linux is a standard package that contains a variety of essential utilities for Linux systems, including fdisk, mount, and more. This job builds Util-linux, which is essential for system management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Util-linux.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Util-linux-2.40.4
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/util-linux-2.40.4
+
+          TODO: Understand why for aarch64 we need to disable liblastlog2
+          if [ "$(uname -m)" = "aarch64" ]; then
+            ./configure --prefix=/usr --disable-chfn-chsh --disable-login --disable-nologin --disable-su --disable-setpriv --disable-runuser --disable-pylibmount --disable-static --without-python --docdir=/usr/share/doc/util-linux-2.40.4 --disable-liblastlog2
+          else
+            ./configure --prefix=/usr --disable-chfn-chsh --disable-login --disable-nologin --disable-su --disable-setpriv --disable-runuser --disable-pylibmount --disable-static --without-python --docdir=/usr/share/doc/util-linux-2.40.4
+          fi
+
+          make
+          make install
+        '
+
+    - name: 0078 - E2fsprogs (Basic System Software)
+      version: 1.47.2
+      archive_file: /sources/e2fsprogs-1.47.2.tar.gz
+      source_dir: /sources/e2fsprogs-1.47.2
+      exec_command: echo
+      build_tool: true
+      description: |
+        E2fsprogs is a package that contains utilities for managing ext2, ext3, and ext4 filesystems. This job builds E2fsprogs, which is essential for filesystem management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building E2fsprogs.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/E2fsprogs-1.47.2
+      build_command: |
+        {{ chroot_start_command }} -c '
+          find / -name "pkgconf" || echo "pkgconf not found"
+          cd /sources/e2fsprogs-1.47.2
+          mkdir -v build
+          cd build
+          ../configure --prefix=/usr          \
+                      --sysconfdir=/etc       \
+                      --enable-elf-shlibs     \
+                      --disable-libblkid      \
+                      --disable-libuuid       \
+                      --disable-uuidd         \
+                      --disable-fsck
+          make
+          make check
+          make install
+          rm -fv /usr/lib/{libcom_err,libe2p,libext2fs,libss}.a
+          gunzip -v /usr/share/info/libext2fs.info.gz
+          install-info --dir-file=/usr/share/info/dir /usr/share/info/libext2fs.info
+          sed "s/metadata_csum_seed,//" -i /etc/mke2fs.conf
+        '
+
+    - name: 0079 - Sysklogd (Basic System Software)
+      version: 2.7.0
+      archive_file: /sources/sysklogd-2.7.0.tar.gz
+      source_dir: /sources/sysklogd-2.7.0
+      exec_command: echo
+      build_tool: true
+      description: |
+        Sysklogd is a package that contains the syslog daemon and klog daemon for logging system messages. This job builds Sysklogd, which is essential for system logging in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Sysklogd.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Sysklogd-2.7.0
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/sysklogd-2.7.0
+          ./configure --prefix=/usr --sysconfdir=/etc
+          make
+          make install
+        '
+
+    - name: 0080 - SysVinit (Basic System Software)
+      version: 3.14
+      archive_file: /sources/sysvinit-3.14.tar.xz
+      source_dir: /sources/sysvinit-3.14
+      exec_command: echo
+      build_tool: true
+      description: |
+        SysVinit is a package that provides the traditional System V-style init system for managing system startup and shutdown. This job builds SysVinit, which is essential for system initialization in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building SysVinit.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/SysVinit-3.14
+      build_command: |
+        cd /mnt/lfs/sources/sysvinit-3.14
+        curl -O https://www.linuxfromscratch.org/patches/lfs/12.3/sysvinit-3.14-consolidated-1.patch
+        {{ chroot_start_command }} -c '
+          cd /sources/sysvinit-3.14
+          patch -Np1 -i ../sysvinit-3.14-consolidated-1.patch
+          make
+          make install
+        '
+
+    - name: 0081 - openssh (Basic System Software)
+      version: 10.0p1
+      archive_file: /sources/openssh-10.0p1.tar.gz
+      source_dir: /sources/openssh-10.0p1
+      description: |
+        OpenSSH is a free version of the SSH connectivity tools that technical users rely on. This job builds OpenSSH, which is essential for secure remote access in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building OpenSSH.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/openssh-10.0p1
+      build_tool: true
+      exec_command: echo
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/openssh-10.0p1
+          ./configure --prefix=/usr \
+                      --sysconfdir=/etc/ssh \
+                      --with-md5-passwords \
+                      --with-privsep-path=/var/lib/sshd
+
+          make
+          make install
+          /bin/cp /sources/conf_tmp/sshd_config /etc/ssh/sshd_config
+          groupadd -g 33 sshd || echo "Group sshd already exists, continuing anyway"
+          useradd -c "sshd Privsep" -d /var/lib/sshd -g sshd -s /bin/false -u 33 sshd || echo "User sshd already exists, continuing anyway"
+        '
+
+    - name: 0082 - Stripping (Basic System Software)
+      version: 1.0
+      archive_file: /sources/empty.tar.gz
+      source_dir: /sources
+      build_tool: false
+      description: |
+        This job strips unnecessary symbols from the binaries and libraries in the LFS environment to reduce their size.
+      category:
+        This job is part of the basic system software setup, specifically for stripping binaries and libraries.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Stripping
+      build_command: echo
+      exec_command: |
+        cd /mnt/lfs/sources
+        {{ chroot_start_command }} -c '
+          cd /sources
+          ./strip.sh
+        '
+
+    - name: 0083 - Cleaning Up (Basic System Software)
+      version: 1.0
+      archive_file: /sources/empty.tar.gz
+      source_dir: /sources
+      build_tool: false
+      build_command: echo
+      description: |
+        This job cleans up temporary files and unnecessary files from the LFS environment after the basic system software has been built.
+      category:
+        This job is part of the basic system software setup, specifically for cleaning up after the build process.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Cleaning-Up
+      exec_command: |
+        cd /mnt/lfs/sources
+        {{ chroot_start_command }} -c '
+          rm -rf /tmp/{*,.*}
+          find /usr/lib /usr/libexec -name \*.la -delete
+          find /usr -depth -name $(uname -m)-lfs-linux-gnu\* | xargs rm -rf
+        '
+
+    - name: 0084 - libgcrypt (Basic System Software) OPTIONAL
+      version: 1.11.1
+      archive_file: /sources/libgcrypt-1.11.1.tar.bz2
+      source_dir: /sources/libgcrypt-1.11.1
+      description: |
+        Libgcrypt is a general-purpose cryptographic library based on the code from GnuPG. This job builds Libgcrypt, which is essential for cryptographic operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libgcrypt.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libgcrypt-1.11.1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libgcrypt-1.11.1
+          ./configure --prefix=/usr
+          make
+          make -C doc html                                    
+          makeinfo --html --no-split -o doc/gcrypt_nochunks.html doc/gcrypt.texi
+          makeinfo --plaintext       -o doc/gcrypt.txt           doc/gcrypt.texi
+          make install
+          install -v -dm755   /usr/share/doc/libgcrypt-1.11.1
+          install -v -m644    README doc/{README.apichanges,fips*,libgcrypt*} \
+                              /usr/share/doc/libgcrypt-1.11.1
+
+          install -v -dm755   /usr/share/doc/libgcrypt-1.11.1/html
+          install -v -m644 doc/gcrypt.html/* \
+                              /usr/share/doc/libgcrypt-1.11.1/html
+          install -v -m644 doc/gcrypt_nochunks.html \
+                              /usr/share/doc/libgcrypt-1.11.1
+          install -v -m644 doc/gcrypt.{txt,texi} \
+                              /usr/share/doc/libgcrypt-1.11.1
+        '
+
+    - name: 0085 - OPTIONALlibksba (Basic System Software) OPTIONAL
+      version: 1.6.7
+      archive_file: /sources/libksba-1.6.7.tar.bz2
+      source_dir: /sources/libksba-1.6.7
+      description: |
+        Libksba is a library that provides access to the X.509 certificate and CRL formats. This job builds Libksba, which is essential for handling certificates in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libksba.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libksba-1.6.7
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libksba-1.6.7
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0086 - npth (Basic System Software) OPTIONAL
+      version: 1.8
+      archive_file: /sources/npth-1.8.tar.bz2
+      source_dir: /sources/npth-1.8
+      description: |
+        Npth is a library that provides a portable, non-blocking thread API for GnuPG. This job builds Npth, which is essential for threading support in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Npth.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Npth-1.8
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/npth-1.8
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+    - name: 0087 - libgpg-error (Basic System Software) OPTIONAL
+      version: 1.55
+      archive_file: /sources/libgpg-error-1.55.tar.bz2
+      source_dir: /sources/libgpg-error-1.55
+      description: |
+        Libgpg-error is a library that defines common error values for all GnuPG components. This job builds Libgpg-error, which is essential for error handling in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libgpg-error.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libgpg-error-1.55
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libgpg-error-1.55
+          ./configure --prefix=/usr
+          make
+          make install
+          install -v -m644 -D README /usr/share/doc/libgpg-error-1.55/README
+        '
+
+    - name: 0088 - gpgme (Basic System Software) OPTIONAL
+      version: 2.0.0
+      archive_file: /sources/gpgme-2.0.0.tar.bz2
+      source_dir: /sources/gpgme-2.0.0
+      description: |
+        GPGME is a library that provides a high-level crypto API for GnuPG. This job builds GPGME, which is essential for cryptographic operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building GPGME.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/GPGME-2.0.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gpgme-2.0.0
+          ls build || mkdir build
+          cd build 
+          ../configure --prefix=/usr --disable-static
+          make
+          make install  
+        '
+
+    - name: 0089 - libassuan (Basic System Software) OPTIONAL
+      version: 3.0.2
+      archive_file: /sources/libassuan-3.0.2.tar.bz2
+      source_dir: /sources/libassuan-3.0.2
+      description: |
+        Libassuan is a library that provides a simple IPC mechanism for communication between applications. This job builds Libassuan, which is essential for inter-process communication in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libassuan.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libassuan-3.0.2
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libassuan-3.0.2
+          ./configure --prefix=/usr
+          make
+          make -C doc html
+          makeinfo --html --no-split -o doc/assuan_nochunks.html doc/assuan.texi
+          makeinfo --plaintext -o doc/assuan.txt doc/assuan.texi
+          make -C doc pdf ps
+          make install
+          install -v -dm755 /usr/share/doc/libassuan-3.0.2/html
+          install -v -m644 doc/assuan.html/* /usr/share/doc/libassuan-3.0.2/html
+          install -v -m644 doc/assuan_nochunks.html /usr/share/doc/libassuan-3.0.2
+          install -v -m644 doc/assuan.{txt,texi} /usr/share/doc/libassuan-3.0.2
+        '
+  
+    - name: 0090 - gnupg (Basic System Software) OPTIONAL
+      version: 2.4.8
+      archive_file: /sources/gnupg-2.4.8.tar.bz2
+      source_dir: /sources/gnupg-2.4.8
+      description: |
+        GnuPG is a complete and free implementation of the OpenPGP standard, which allows for secure communication and data storage. This job builds GnuPG, which is essential for cryptographic operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building GnuPG.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/GnuPG-2.4.8
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/gnupg-2.4.8
+          mkdir build
+          cd    build
+
+          ../configure --prefix=/usr        \
+                      --localstatedir=/var \
+                      --sysconfdir=/etc    \
+                      --docdir=/usr/share/doc/gnupg-2.4.8
+          make
+
+          makeinfo --html --no-split -I doc -o doc/gnupg_nochunks.html ../doc/gnupg.texi
+          makeinfo --plaintext       -I doc -o doc/gnupg.txt           ../doc/gnupg.texi
+          make -C doc html
+          make -C doc pdf
+          make install
+
+          install -v -m755 -d /usr/share/doc/gnupg-2.4.8/html
+          install -v -m644    doc/gnupg_nochunks.html \
+                              /usr/share/doc/gnupg-2.4.8/html/gnupg.html
+          install -v -m644    ../doc/*.texi doc/gnupg.txt \
+                              /usr/share/doc/gnupg-2.4.8
+          install -v -m644    doc/gnupg.html/* \
+                              /usr/share/doc/gnupg-2.4.8/html
+          install -v -m644 doc/gnupg.pdf \
+                          /usr/share/doc/gnupg-2.4.8
+        '
+
+    - name: 0091 - glib (Basic System Software) OPTIONAL
+      version: 2.84.3
+      archive_file: /sources/glib-2.84.3.tar.xz
+      source_dir: /sources/glib-2.84.3
+      exec_command: echo
+      description: |
+        Glib is a low-level core library that forms the basis for libraries such as GTK+ and GStreamer. This job builds Glib, which is essential for many applications in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Glib.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Glib-2.84.3
+      build_tool: true
+      build_command: |
+        cd /mnt/lfs/sources
+        curl -O https://www.linuxfromscratch.org/patches/blfs/svn/glib-skip_warnings-1.patch
+        rm -rf /mnt/lfs/sources/glib-2.84.3 || echo "Removing glib-2.84.3 directory failed, continuing anyway"
+        tar -xf ./glib-2.84.3.tar.xz
+        cd glib-2.84.3
+        patch -Np1 -i ../glib-skip_warnings-1.patch
+
+        {{ chroot_start_command }} -c '
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/sources/glib-2.84.3/build/gio:/sources/glib-2.84.3/build/glib/:/sources/glib-2.84.3/build/gobject"
+          cd /sources/glib-2.84.3
+          mkdir build
+          cd    build
+          export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+          meson setup ..                  \
+                  --prefix=/usr             \
+                  --buildtype=release       \
+                  -D introspection=disabled \
+                  -D glib_debug=disabled    \
+                  -D man-pages=disabled      \
+                  -D sysprof=disabled
+            ninja
+            ninja install
+        '
+
+    - name: 0092 - GO (Basic System Software) OPTIONAL
+      version: 1.22.9
+      archive_file: /sources/empty.tar.gz
+      source_dir: /sources/empty.tar.gz
+      description: |
+        Go is an open-source programming language that makes it easy to build simple, reliable, and efficient software. This job installs Go, which is essential for building Go applications in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for installing Go.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Go-1.22.9
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        cd /mnt/lfs/sources
+
+        ls /mnt/lfs/usr/local/go || sudo mkdir -p /mnt/lfs/usr/local/go
+        ls /mnt/lfs/usr/local/go/bin || sudo mkdir /mnt/lfs/usr/local/go/bin
+
+        ls /usr/bin/go || sudo apt-get reinstall golang
+
+        ls goroot || git clone https://go.googlesource.com/go goroot
+        cd goroot
+        git checkout origin/release-branch.go1.24
+        export GOROOT=/mnt/lfs/sources/goroot
+
+        cd ./src
+        bash all.bash
+        cd ..
+        ls /mnt/lfs/usr/local || mkdir /mnt/lfs/usr/local
+        sudo /bin/cp ./bin/go /mnt/lfs/usr/local/go/bin/ 
+        {{ chroot_start_command }} -c '
+          ln -s /usr/local/go/bin/go /usr/local/bin/go 
+        '
+
+    - name: 0093 - conmon (Basic System Software) OPTIONAL
+      version: 2.1.13
+      archive_file: /sources/conmon-v2.1.13.tar.gz
+      source_dir: /sources/conmon-v2.1.13
+      description: |
+        Conmon is a lightweight container monitor that is used to manage the lifecycle of containers. This job builds Conmon, which is essential for container management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Conmon.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Conmon-v2.1.13
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/conmon
+          make
+          make install
+          make crio
+          /bin/cp /sources/cri-o-1.33.1/bin/pinns /usr/local/bin
+        '
+
+    - name: 0094 - libpsl (Basic System Software) OPTIONAL
+      version: 0.21.5
+      archive_file: /sources/libpsl-0.21.5.tar.gz
+      source_dir: /sources/libpsl-0.21.5
+      description: |
+        Libpsl is a library that provides support for the Public Suffix List, which is used to determine the effective top-level domain (eTLD) of a domain name. This job builds Libpsl, which is essential for domain name handling in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libpsl.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libpsl-0.21.5
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libpsl-0.21.5
+          mkdir build
+          cd    build
+          meson setup --prefix=/usr --buildtype=release
+          ninja
+          ninja install
+        '
+
+    - name: 0095 - libidn2 (Basic System Software) OPTIONAL
+      version: 2.3.8
+      archive_file: /sources/libidn2-2.3.8.tar.gz
+      source_dir: /sources/libidn2-2.3.8
+      description: |
+        Libidn2 is a library that provides support for Internationalized Domain Names (IDN) and is used to handle domain names in various languages. This job builds Libidn2, which is essential for domain name handling in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libidn2.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libidn2-2.3.8
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libidn2-2.3.8
+          ./configure --prefix=/usr --disable-static
+          make
+          make install
+        '
+
+    - name: 0096 - libunistring (Basic System Software) OPTIONAL
+      version: 1.3
+      archive_file: /sources/libunistring-1.3.tar.xz
+      source_dir: /sources/libunistring-1.3.tar.xz
+      description: |
+        Libunistring is a library that provides functions for manipulating Unicode strings and is used in various applications for handling text in different languages. This job builds Libunistring, which is essential for text handling in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libunistring.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libunistring-1.30
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libunistring-1.3
+          ./configure --prefix=/usr --disable-static
+          make
+          make install
+        '
+
+    - name: 0097 - curl (Basic System Software) OPTIONAL
+      version: 8.15.0
+      archive_file: /sources/curl-8.15.0.tar.xz
+      source_dir: /sources/curl-8.15.0
+      description: |
+        Curl is a command-line tool for transferring data with URLs. It supports various protocols and is widely used for downloading files and interacting with web services. This job builds Curl, which is essential for network operations in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Curl.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Curl-8.15.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/curl-8.15.0
+          ./configure --prefix=/usr    \
+            --disable-static \
+            --with-openssl   \
+            --with-ca-path=/etc/ssl/certs
+          make
+          make install
+        '
+    - name: 0098 - asciidoc (Basic System Software) OPTIONAL
+      version: 9.1.0
+      archive_file: /sources/asciidoc-9.1.0.tar.gz
+      source_dir: /sources/asciidoc-9.1.0
+      description: |
+        Asciidoc is a text document format for writing documentation, articles, books, and more. This job builds Asciidoc, which is essential for generating documentation in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Asciidoc.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Asciidoc-9.1.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/asciidoc-9.1.0
+          sed -i 's:doc/testasciidoc.1::' Makefile.in
+          rm -f doc/testasciidoc.1.txt
+          ./configure --prefix=/usr     \
+                      --sysconfdir=/etc \
+                      --docdir=/usr/share/doc/asciidoc-9.1.0
+          make
+          make install
+          make docs
+        '
+
+    - name: 0099 - libxslt (Basic System Software) OPTIONAL
+      version: 1.1.43
+      archive_file: /sources/libxslt-1.1.43.tar.xz
+      source_dir: /sources/libxslt-1.1.43
+      description: |
+        Libxslt is a library for transforming XML documents using XSLT stylesheets. This job builds Libxslt, which is essential for XML processing in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libxslt.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libxslt-1.1.43
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libxslt-1.1.43
+          ./configure --prefix=/usr    \
+                      --disable-static \
+                      --docdir=/usr/share/doc/libxslt-1.1.43
+          make
+          make install
+        '
+
+    - name: 0100 - libxml2 (Basic System Software) OPTIONAL
+      version: 2.14.5
+      archive_file: /sources/libxml2-2.14.5.tar.xz
+      source_dir: /sources/libxml2-2.14.5
+      description: |
+        Libxml2 is a library for parsing XML and HTML documents. It provides a wide range of features for working with XML data. This job builds Libxml2, which is essential for XML processing in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Libxml2.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Libxml2-2.14.5
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libxml2-2.14.5
+          ./configure --prefix=/usr     \
+                      --sysconfdir=/etc \
+                      --disable-static  \
+                      --with-history    \
+                      --with-icu        \
+                      PYTHON=/usr/bin/python3 \
+                      --docdir=/usr/share/doc/libxml2-2.14.5
+          make
+          make install
+        '
+
+    - name: 0101 - icu4c (Basic System Software) OPTIONAL
+      version: 77.1_1
+      archive_file: /sources/icu4c-77_1-src.tgz
+      source_dir: /sources/icu4c-77_1-src
+      description: |
+        ICU (International Components for Unicode) is a set of C/C++ and Java libraries providing Unicode and Globalization support for software applications. This job builds ICU, which is essential for internationalization in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building ICU.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/ICU-77_1
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/icu/source
+          ./configure --prefix=/usr
+          make
+          make install
+        '
+
+    - name: 0102 - git (Basic System Software) OPTIONAL
+      version: 2.49.0
+      archive_file: /sources/git-2.49.0.tar.xz
+      source_dir: /sources/git-2.49.0
+      description: |
+        Git is a distributed version control system that allows multiple developers to work on a project simultaneously. This job builds Git, which is essential for version control in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Git.
+      jenkins_job_url: http://localhost:8080/job/containers/git-2.49.0
+      build_tool: true
+      exec_command: echo
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/git
+          make configure
+          ./configure --prefix=/usr --with-openssl --with-libpcre2 --with-zlib --with-curl --with-expat --with-perl=/usr/bin/perl
+          make all
+          make install
+        '
+
+    - name: 0103 - libseccomp (Basic System Software) OPTIONAL
+      version: 2.6.0
+      archive_file: /sources/libseccomp
+      source_dir: /sources/libseccomp
+      description: |
+        libseccomp is a library that provides an easy-to-use interface for filtering a process's system calls using the Linux kernel's seccomp feature. This job builds libseccomp, which is essential for security in the LFS environment.
+      category:
+        This job is part of the container setup, specifically for building libseccomp.
+      jenkins_job_url: http://localhost:8080/job/containers/libseccomp-2.6.0
+      build_tool: true
+      exec_command: echo
+      build_command: |  
+        cd /mnt/lfs/sources/libseccomp
+        git checkout v2.6.0
+        {{ chroot_start_command }} -c '
+          cd /sources/libseccomp
+          bash autogen.sh
+          ./configure --prefix=/usr --host=$LFS_TGT
+          make
+          make install
+        '
+
+    - name: 0104 - libtasn1 (Basic System Software) OPTIONAL
+      version: 4.20.0
+      archive_file: /sources/libtasn1-4.20.0.tar.gz
+      source_dir: /sources/libtasn1-4.20.0
+      description: |
+        libtasn1 is a library that provides support for the ASN.1 data serialization format. This job builds libtasn1, which is essential for handling certificates in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building libtasn1.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/libtasn1-4.20.0
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/libtasn1-4.20.0
+          ./configure --prefix=/usr --disable-static
+          make
+          make install
+          make -C doc/reference install-data-local
+        '
+
+    - name: 0105 - p11-kit (Basic System Software) OPTIONAL
+      version: 0.25.5
+      archive_file: /sources/p11-kit-0.25.5.tar.xz
+      source_dir: /sources/p11-kit-0.25.5
+      description: |
+        P11-kit is a library that provides a way to access PKCS#11 modules and manage certificates. This job builds P11-kit, which is essential for certificate management in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building P11-kit.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/p11-kit-0.25.5
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/p11-kit-0.25.5
+          sed "20,$ d" -i trust/trust-extract-compat
+          echo "# Copy existing anchor modifications to /etc/ssl/local" >> trust/trust-extract-compat
+          echo "/usr/libexec/make-ca/copy-trust-modifications" >> trust/trust-extract-compat
+          echo "" >> trust/trust-extract-compat
+          echo "# Update trust stores" >> trust/trust-extract-compat
+          echo "/usr/sbin/make-ca -r" >> trust/trust-extract-compat
+
+          mkdir p11-build
+          cd    p11-build 
+
+          meson setup ..            \
+                --prefix=/usr       \
+                --buildtype=release \
+                -D trust_paths=/etc/pki/anchors \
+                -D trust_module=enabled
+          ninja
+
+          ninja install
+          ln -sfv /usr/libexec/p11-kit/trust-extract-compat \
+                  /usr/bin/update-ca-certificates
+
+        ln -sfv ./pkcs11/p11-kit-trust.so /usr/lib/libnssckbi.so
+
+        '
+    - name: 0106 - make-ca (Basic System Software) OPTIONAL
+      version: 1.16.1
+      archive_file: /sources/make-ca-1.16.1.tar.gz
+      source_dir: /sources/make-ca-1.16.1
+      description: |
+        This job installs the CA certificates, which are essential for establishing secure connections in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for installing CA certificates.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/make-ca-1.16.1
+      build_command: echo
+      build_tool: false
+      exec_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/make-ca-1.16.1
+          make install
+          install -vdm755 /etc/ssl/local
+          /usr/sbin/make-ca -g
+        '
+
+    - name: 0107 - iptables (Basic System Software) OPTIONAL
+      version: 1.8.11
+      archive_file: /sources/iptables-1.8.11.tar.xz
+      source_dir: /sources/iptables-1.8.11
+      description: |
+        Iptables is a user-space utility program that allows a system administrator to configure the IP packet filter rules of the Linux kernel firewall. This job builds Iptables, which is essential for network security in the LFS environment.
+      category:
+        This job is part of the basic system software setup, specifically for building Iptables.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Iptables-1.8.11
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/iptables-1.8.11
+          ./configure --prefix=/usr      \
+                      --disable-nftables \
+                      --enable-libipq
+          make
+          make install
+        '
+
+    - name: 0109 - cpio (Basic System Software) OPTIONAL
+      version: 2.15
+      archive_file: /sources/cpio-2.15.tar.bz2
+      source_dir: /sources/cpio-2.15
+      description: |
+        Cpio is a tool for creating and extracting archives. This job builds Cpio, which is essential for managing file archives in the LFS environment.
+      category:
+        This job is part of the system configuration setup, specifically for building Cpio.
+      jenkins_job_url: http://localhost:8080/job/system_configuration/Cpio-2.15
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/cpio-2.15
+          ./configure --prefix=/usr \
+                      --enable-mt   \
+                      --with-rmt=/usr/libexec/rmt
+          make
+          make install
+        '
+
+  system_configuration:
+    - name: 0001 - LFS-Bootscripts (System Configuration)
+      version: 20240825
+      archive_file: /sources/lfs-bootscripts-20240825.tar.xz
+      source_dir: /sources/lfs-bootscripts-20240825
+      description: |
+        LFS-Bootscripts is a collection of scripts used to boot the LFS system. This job installs the LFS-Bootscripts, which is essential for booting the LFS system.
+      category:
+        This job is part of the basic system software setup, specifically for installing LFS-Bootscripts.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/LFS-Bootscripts-20240825
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/lfs-bootscripts-20240825
+          make install
+        '
+
+    - name: 0002 - BLFS-bootscripts-IPTABLES OPTIONAL (System Configuration)
+      version: 20250225
+      archive_file: /sources/blfs-bootscripts-20250225.tar.xz
+      source_dir: /sources/blfs-bootscripts-20250225
+      description: |
+        BLFS-Bootscripts is a collection of scripts used to boot the BLFS system. This job installs the BLFS-Bootscripts, which is essential for booting the BLFS system.
+      category:
+        This job is part of the basic system software setup, specifically for installing BLFS-Bootscripts.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/BLFS-Bootscripts-20250225
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          cd /sources/blfs-bootscripts-20250225
+          make install-iptables
+        '
+
+    - name: 0003 - Linux (System Configuration)
+      version: 6.13.4
+      archive_file: /sources/linux-6.13.4.tar.xz
+      source_dir: /sources/linux-6.13.4
+      description: |
+        Linux is the kernel of the LFS system. This job builds the Linux kernel, which is essential for the LFS system to function.
+      category:
+        This job is part of the basic system software setup, specifically for building the Linux kernel.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Linux-6.13.4
+      exec_command: echo
+      build_tool: true
+      build_command: |
+        {{ chroot_start_command }} -c '
+          
+          cd /sources/linux-6.13.4
+          
+          make clean
+
+          echo "Building Kernel for $(uname -m) architecture"
+
+          if [ "$(uname -m)" = "x86_64" ]; then
+            /bin/cp /sources/kernel_configs/kernel_config_x86_64 .config
+            make -j$(nproc)
+          elif [ "$(uname -m)" = "aarch64" ]; then
+            export ARCH=arm64
+            /bin/cp /sources/kernel_configs/kernel_config_aarch64 .config
+            make -j$(nproc)
+          else
+            echo "Error, non-x86_64 or aarch64 architectures are not supported."
+            exit 0 
+          fi
+
+          if [ -f /boot/vmlinuz-6.13.4-lfs-12.3 ]; then
+            rm -f /boot/vmlinuz-6.13.4-lfs-12.3
+          fi
+
+          if [ -f /boot/System.map-6.13.4 ]; then
+            rm -f /boot/System.map-6.13.4
+          fi
+          
+          if [ -f /boot/config-6.13.4 ]; then
+            rm -f /boot/config-6.13.4
+          fi
+
+          if [ -d /usr/share/doc/linux-6.13.4 ]; then
+            rm -rf /usr/share/doc/linux-6.13.4
+          fi
+
+          cp -iv arch/x86/boot/bzImage /boot/vmlinuz-6.13.4-lfs-12.3
+          cp -iv System.map /boot/System.map-6.13.4
+          cp -iv .config /boot/config-6.13.4
+          cp -r Documentation -T /usr/share/doc/linux-6.13.4
+        '
+
+    - name: 0004 - Prepare System Image (System Configuration)
+      version: 1.0
+      archive_file: /mnt/lfs/sources/empty.tar.xz
+      source_dir: /mnt/lfs/sources
+      description: |
+        This job prepares the system image for the LFS environment by running a script that sets up the necessary configurations and files.
+      category:
+        This job is part of the operating system setup, specifically for preparing the system image.
+      jenkins_job_url: http://localhost:8080/job/basic_system_software/Prepare-System-Image
+      build_tool: false
+      build_command: echo
+      exec_command: |
+        cd /mnt/lfs/sources
+        ./prepare_image.sh --buildmode $BUILD_MODE
+  
+  containers:
+    - name: 0001 - runc (Containers)
+      version: 1.3.0
+      archive_file: /sources/runc-1.3.0.tar.xz
+      source_dir: /sources/runc-1.3.0
+      description: |
+        runc is a CLI tool for spawning and running containers according to the OCI specification. This job builds runc, which is essential for container management in the LFS environment.
+      category:
+        This job is part of the container setup, specifically for building runc.
+      jenkins_job_url: http://localhost:8080/job/containers/runc-1.3.0
+      build_tool: true
+      exec_command: echo
+      build_command: |
+        sudo apt install -y make gcc linux-libc-dev libseccomp-dev pkg-config git
+        rm -rf /mnt/lfs/sources/runc-1.3.0 || echo "Removing runc-1.3.0 directory failed, continuing anyway"
+        cd /mnt/lfs/sources
+        tar -xf /mnt/lfs/sources/runc-1.3.0.tar.xz
+        cd /mnt/lfs/sources/runc
+        sudo make 
+        sudo make install
+        rm -f /mnt/lfs/usr/local/sbin/runc || echo "Removing existing runc failed, continuing anyway"
+        sudo cp -p /usr/local/sbin/runc /mnt/lfs/usr/local/sbin/runc
+  
+    - name: 0002 - cri-o (Containers)
+      version: 1.33.1
+      archive_file: /sources/cri-o-1.33.1.tar.xz
+      source_dir: /sources/cri-o-1.33.1
+      description: |
+        cri-o is an implementation of the Kubernetes Container Runtime Interface (CRI) that allows Kubernetes to use any OCI-compliant runtime as the container runtime for running pods. This job builds cri-o, which is essential for container orchestration in the LFS environment.
+      category:
+        This job is part of the container setup, specifically for building cri-o.
+      jenkins_job_url: http://localhost:8080/job/containers/cri-o-1.33.1
+      build_tool: true
+      exec_command: echo
+      build_command: |
+        sudo apt install -y libgpgme-dev
+        cd /mnt/lfs/sources
+        rm -rf /mnt/lfs/sources/cri-o-1.33.1 || echo "Removing cri-o-1.33.1 directory failed, continuing anyway"
+        tar -xf /mnt/lfs/sources/cri-o-1.33.1.tar.xz
+        {{ chroot_start_command }} -c '
+          export GOROOT="/sources/goroot"
+          export PATH="$PATH:/usr/local/go/bin"
+          cd /sources/cri-o-1.33.1
+          make clean
+          make
+          echo "find bin..."
+          find ./ -type d -name "bin"
+          find ./bin
+          make install PREFIX=/usr/local
+        '
+
+    - name: 0003 - etcd (Containers)
+      version: 3.6.1
+      archive_file: /sources/etcd
+      source_dir: /sources/etcd
+      description: |
+        etcd is a distributed key-value store that provides a reliable way to store data across a cluster of machines. This job builds etcd, which is essential for distributed systems and container orchestration in the LFS environment.
+      category:
+        This job is part of the container setup, specifically for building etcd.
+      jenkins_job_url: http://localhost:8080/job/containers/etcd-3.6.1
+      build_tool: true
+      exec_command: echo
+      build_command: |
+        cd /mnt/lfs/sources/etcd
+        git checkout origin/release-3.6
+        make
+        {{ chroot_start_command }} -c '
+          cd /sources/etcd/bin
+          /bin/cp etcd etcdctl /usr/local/bin/
+        '
+
+    - name: 0004 - kubernetes (Containers)
+      version: 1.33
+      archive_file: /sources/kubernetes
+      source_dir: /sources/kubernetes
+      description: |
+        Kubernetes is an open-source container orchestration platform that automates the deployment, scaling, and management of containerized applications. This job builds Kubernetes, which is essential for managing containers in the LFS environment.
+      category:
+        This job is part of the container setup, specifically for building Kubernetes.
+      jenkins_job_url: http://localhost:8080/job/containers/kubernetes-1.33
+      build_tool: true
+      exec_command: echo
+      build_command: |  
+        cd /mnt/lfs/sources/kubernetes
+        git checkout origin/release-1.33
+        sudo GOFLAGS="-buildvcs=false" make quick-release
+        sudo GOFLAGS="-buildvcs=false" make WHAT=cmd/kubeadm
+        cd _output/release-stage/server/linux-amd64/kubernetes/server/bin
+        sudo /bin/cp kubeadm kube-apiserver kube-controller-manager kube-scheduler kube-proxy kubectl kubelet /mnt/lfs/usr/local/bin/
+          
+    - name: 0005 - kubernetes-setup (Containers)
+      version: 1.33
+      archive_file: /sources/kubernetes
+      source_dir: /sources/kubernetes
+      description: |
+        Kubernetes is an open-source container orchestration platform that automates the deployment, scaling, and management of containerized applications. This job builds Kubernetes, which is essential for managing containers in the LFS environment.
+      category:
+        This job is part of the container setup, specifically for building Kubernetes.
+      jenkins_job_url: http://localhost:8080/job/containers/kubernetes-1.33
+      build_tool: true
+      exec_command: echo
+      build_command: |  
+        cd /tmp/
+
+        # service account
+        openssl genrsa -out service-account-key.pem 4096
+        openssl req -new -x509 -days 365 -key service-account-key.pem -subj "/CN=test" -sha256 -out service-account.pem
+
+        # api-server
+        openssl genrsa -out ca.key 2048
+        openssl req -x509 -new -nodes -key ca.key -subj "/CN=test" -days 10000 -out ca.crt
+        openssl genrsa -out server.key 2048
+        openssl req -new -key server.key -out server.csr -config fake-csr.conf
+        openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key \
+            -CAcreateserial -out server.crt -days 10000 \
+            -extensions v3_ext -extfile fake-csr.conf
+
+        /bin/cp service-account-key.pem ca.crt ca.key server.crt server.key  /mnt/lfs/sources/
+        
+        cd /mnt/lfs/sources/kubernetes
+
+        {{ chroot_start_command }} -c '
+          
+          cd /sources
+          [ -d /etc/kubernetes ] || mkdir /etc/kubernetes
+          [ -d /etc/kubernetes/certs ] || mkdir /etc/kubernetes/certs
+          [ -d /etc/kubernetes/manifests ] || mkdir /etc/kubernetes/manifests    
+          /bin/cp ca.crt ca.key server.crt server.key service-account-key.pem /etc/kubernetes/certs
+
+          cd /etc/kubernetes/certs
+
+          export PATH="$PATH:/usr/local/bin"
+          
+          # kubeconfig
+          kubectl config set-cluster local-apiserver \
+          --certificate-authority=ca.crt \
+          --embed-certs=true \
+          --server=https://127.0.0.1:6443 \
+          --kubeconfig=kubeconfig
+
+          kubectl config set-credentials admin \
+          --client-certificate=server.crt \
+          --client-key=server.key \
+          --embed-certs=true \
+          --kubeconfig=kubeconfig
+
+          kubectl config set-context default \
+          --cluster=local-apiserver \
+          --user=admin \
+          --kubeconfig=kubeconfig
+
+          kubectl config use-context default --kubeconfig=kubeconfig
+
+        '
+        

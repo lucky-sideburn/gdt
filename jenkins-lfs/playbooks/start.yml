@@ -1,0 +1,5 @@
+- name: Create GNU/Linux GDT (Garanti Del Talento)
+  hosts: localhost
+  gather_facts: true
+  roles:
+    - ansible-gdt

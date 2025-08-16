@@ -1,0 +1,13 @@
+- name: Print node name
+  hosts: ubuntu-arm-lfs
+  gather_facts: true
+  tasks:
+    - name: Display the node name
+      debug:
+        msg: "Node name: {{ inventory_hostname }}"
+
+    - name: Start arm_node.yml task of ansible-gdt role
+      include_role:
+        name: ansible-gdt
+        tasks_from: aarch64_lfs.yml
+  

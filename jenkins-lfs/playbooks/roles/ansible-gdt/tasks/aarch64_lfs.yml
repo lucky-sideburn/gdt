@@ -1,0 +1,339 @@
+- name: Show machine architecture
+  debug:
+    msg: "Architecture: {{ ansible_architecture }}"
+
+- name: Ensure user 'jenkins' exists
+  ansible.builtin.user:
+    name: jenkins
+    state: present
+
+- name: Create Jenkins Workdir
+  ansible.builtin.file:
+    path: /opt/jenkins
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: Create Jenkins Agent Home
+  ansible.builtin.file:
+    path: /opt/jenkins/home
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: Create Jenkins Agent Workdir
+  ansible.builtin.file:
+    path: /opt/jenkins/workdir
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install Java
+  ansible.builtin.apt:
+    name: default-jdk
+    state: present
+
+- name: Copy agent.jar to Jenkins home
+  ansible.builtin.copy:
+    src: agent.jar
+    dest: /opt/jenkins/agent/agent.jar
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+  
+- name: Create SystemD unit for start Jenkins agent
+  ansible.builtin.template:
+    src: jenkins-agent.service.j2
+    dest: /etc/systemd/system/jenkins-agent.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart Jenkins agent
+
+- name: Start and enable Jenkins agent service
+  ansible.builtin.systemd:
+    name: jenkins-agent
+    state: started
+    enabled: true
+
+- name: Create /mnt/lfs directory
+  ansible.builtin.file:
+    path: /mnt/lfs
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+
+- name: Set LFS environment variable
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: "LFS=/mnt/lfs"
+    state: present
+
+- name: Set LFS environment variable for jenkins
+  ansible.builtin.lineinfile:
+    path: /home/jenkins/.bashrc
+    line: "export LFS=/mnt/lfs"
+    state: present
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+
+- name: Set LFS environment variable for root
+  ansible.builtin.lineinfile:
+    path: /root/.bashrc
+    line: "export LFS=/mnt/lfs"
+    state: present
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create /mnt/lfs/sources directory
+  ansible.builtin.file:
+    path: /mnt/lfs/sources
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '1777'
+
+- name: Create directories under $LFS
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+  loop:
+    - /mnt/lfs/etc
+    - /mnt/lfs/var
+    - /mnt/lfs/usr/bin
+    - /mnt/lfs/usr/lib
+    - /mnt/lfs/usr/sbin
+    - /mnt/lfs/tools
+
+- name: Create symbolic links for bin, lib, and sbin using shell
+  ansible.builtin.shell: |
+    for i in bin lib sbin; do
+      [ -L /mnt/lfs/$i ] || ln -sv usr/$i /mnt/lfs/$i
+    done
+  args:
+    executable: /bin/bash
+
+- name: Create symbolic links for bin, lib, and sbin
+  ansible.builtin.file:
+    src: "usr/{{ item }}"
+    dest: "/mnt/lfs/{{ item }}"
+    state: link
+  loop:
+    - bin
+    - lib
+    - sbin
+
+- name: Create lib directory for ARM architecture
+  ansible.builtin.file:
+    path: /mnt/lfs/lib
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+  when: ansible_architecture == "aarch64"
+
+- name: Create $LFS/tools directory
+  ansible.builtin.file:
+    path: /mnt/lfs/tools
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: Create 'lfs' group
+  ansible.builtin.group:
+    name: lfs
+    state: present
+
+- name: Create 'lfs' user
+  ansible.builtin.user:
+    name: lfs
+    shell: /bin/bash
+    group: lfs
+    create_home: yes
+    home: /home/lfs
+    skeleton: /dev/null
+    state: present
+
+- name: Change ownership of lib for aarch64 architecture
+  ansible.builtin.command:
+    cmd: chown -v jenkins /mnt/lfs/lib
+  args:
+    executable: /bin/bash
+  when: ansible_architecture == "aarch64"
+
+- name: Configure environment variables for LFS
+  ansible.builtin.copy:
+    dest: /home/lfs/.bashrc
+    content: |
+      set +h
+      umask 022
+      LFS=/mnt/lfs
+      LC_ALL=POSIX
+      LFS_TGT=$(uname -m)-lfs-linux-gnu
+      PATH=/usr/bin
+      if [ ! -L /bin ]; then PATH=/bin:$PATH; fi
+      PATH=$LFS/tools/bin:$PATH
+      CONFIG_SITE=$LFS/usr/share/config.site
+      MAKEFLAGS=-j$(nproc)
+
+      export LFS LC_ALL LFS_TGT PATH CONFIG_SITE MAKEFLAGS
+    owner: lfs
+    group: lfs
+    mode: '0644'
+
+- name: Configure environment variables for Jenkins
+  ansible.builtin.copy:
+    dest: /home/jenkins/.bashrc
+    content: |
+      set +h
+      umask 022
+      LFS=/mnt/lfs
+      LC_ALL=POSIX
+      LFS_TGT=$(uname -m)-lfs-linux-gnu
+      PATH=/usr/bin
+      if [ ! -L /bin ]; then PATH=/bin:$PATH; fi
+      PATH=$LFS/tools/bin:$PATH
+      CONFIG_SITE=$LFS/usr/share/config.site
+      MAKEFLAGS=-j$(nproc)
+
+      export LFS LC_ALL LFS_TGT PATH CONFIG_SITE MAKEFLAGS
+    owner: lfs
+    group: lfs
+    mode: '0644'
+
+- name: Copy chroot_lfs.sh to /home/jenkins
+  ansible.builtin.copy:
+    src: chroot_lfs.sh
+    dest: /home/jenkins/chroot_lfs.sh
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: Add Jenkins to sudoers with no password
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    line: "jenkins ALL=(ALL) NOPASSWD:ALL"
+    state: present
+    validate: 'visudo -cf %s'
+
+- name: Install additional packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ lfs_packages }}"
+
+- name: Copy version-check.sh to /tmp
+  ansible.builtin.copy:
+    src: version-check.sh
+    dest: /tmp/version-check.sh
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: execute version-check.sh
+  ansible.builtin.command:
+    cmd: /tmp/version-check.sh
+  register: version_check_result
+  ignore_errors: false
+
+- name: Print version-check.sh output
+  ansible.builtin.debug:
+    msg: "{{ version_check_result.stdout }}"
+
+- name: Download lfs_extra_archives archive files if not exists
+  ansible.builtin.get_url:
+    url: "{{ lfs_repo_url }}/{{ item | basename }}"
+    dest: /mnt/lfs/sources/{{ item | basename }}
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+    force: no
+  loop: "{{ lfs_extra_archives}}"
+  when: jenkins_download_lfs_archives | bool
+
+- name: Download cross_toolchain archive files if not exists
+  ansible.builtin.get_url:
+    url: "{{ lfs_repo_url }}/{{ item.archive_file | basename }}"
+    dest: /mnt/lfs/sources/{{ item.archive_file | basename }}
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+    force: no
+  loop: "{{ jenkins_jobs.cross_toolchain }}"
+  when: jenkins_download_lfs_archives | bool
+
+- name: Download cross_compiling_temporary_tools archive files
+  ansible.builtin.get_url:
+    url: "{{ lfs_repo_url }}/{{ item.archive_file | basename }}"
+    dest: /mnt/lfs/sources/
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+    force: no
+  loop: "{{ jenkins_jobs.cross_compiling_temporary_tools }}"
+  when: jenkins_download_lfs_archives | bool
+
+- name: Download chroot_and_building_additional_temporary_tools archive files
+  ansible.builtin.get_url:
+    url: "{{ lfs_repo_url }}/{{ item.archive_file | basename }}"
+    dest: /mnt/lfs/sources/
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+  loop: "{{ jenkins_jobs.chroot_and_building_additional_temporary_tools }}"
+  when: jenkins_download_lfs_archives | bool
+
+- name: Download basic_system_software archive files
+  ansible.builtin.get_url:
+    url: "{{ lfs_repo_url }}/{{ item.archive_file | basename }}"
+    dest: /mnt/lfs/sources/
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+    force: no
+  loop: "{{ jenkins_jobs.basic_system_software }}"
+  when: jenkins_download_lfs_archives | bool
+
+- name: Download system_configuration archive files
+  ansible.builtin.get_url:
+    url: "{{ lfs_repo_url }}/{{ item.archive_file | basename }}"
+    dest: /mnt/lfs/sources/
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+    force: no
+  loop: "{{ jenkins_jobs.system_configuration }}"
+  when: jenkins_download_lfs_archives | bool
+
+- name: Download containers archive files
+  ansible.builtin.get_url:
+    url: "{{ lfs_repo_url }}/{{ item.archive_file | basename }}"
+    dest: /mnt/lfs/sources/
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+    force: no
+  loop: "{{ jenkins_jobs.containers }}"
+  when: jenkins_download_lfs_archives | bool
+
+- name: Include system configuration tasks
+  include_tasks: system_conf.yml
+  vars:
+    role: ansible-gdt

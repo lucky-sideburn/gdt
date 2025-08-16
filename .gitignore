@@ -1,0 +1,4 @@
+jenkins-lfs/inventories/hosts_prod.ini
+jenkins-lfs/test.sh
+.vagrant
+

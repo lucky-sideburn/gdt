@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-controller-manager
+  namespace: kube-system
+spec:
+  containers:
+  - name: kube-controller-manager
+    image: k8s.gcr.io/kube-controller-manager:v1.33.2
+    command:
+    - kube-controller-manager
+    - --kubeconfig=/etc/kubernetes/controller-manager.conf
+    - --service-account-private-key-file=/etc/kubernetes/certs/sa.key
+    - --root-ca-file=/etc/kubernetes/certs/ca.crt
+    - --cluster-signing-cert-file=/etc/kubernetes/certs/ca.crt
+    - --cluster-signing-key-file=/etc/kubernetes/certs/ca.key
+    - --allocate-node-cidrs=true
+    - --cluster-cidr=10.244.0.0/16
+    - --leader-elect=true
+    volumeMounts:
+    - mountPath: /etc/kubernetes
+      name: kubeconfig
+      readOnly: true
+  volumes:
+  - name: kubeconfig
+    hostPath:
+      path: /etc/kubernetes
+      type: Directory
+  
