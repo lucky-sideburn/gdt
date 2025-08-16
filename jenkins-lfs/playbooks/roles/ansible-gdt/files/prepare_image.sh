@@ -18,13 +18,13 @@ fi
 
 echo "[INFO] Using build strategy: $BUILD_MODE"
 
-if [[ "$BUILD_MODE" == "host_libvirt" ]]; then
-  echo "[INFO] BUILD_MODE is set to host_libvirt. Proceeding with KVM-specific setup..."
+if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
+  echo "[INFO] BUILD_MODE is set to host_libvirt_amd64. Proceeding with KVM-specific setup..."
   IMAGE_PATH="/var/lib/libvirt/images/lfs.img"
   IMAGE_CLONE_PATH="/var/lib/libvirt/images/lfs-clone.img"
   LIVE_VM_ISO_PATH="/var/lib/libvirt/images/alpine.iso"
-elif [[ "$BUILD_MODE" == "vagrant_qemu" ]]; then
-  echo "[INFO] BUILD_MODE is set to vagrant_qemu. Proceeding with Vagrant-specific setup..."
+elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
+  echo "[INFO] BUILD_MODE is set to vagrant_qemu_aarch64. Proceeding with Vagrant-specific setup..."
   IMAGE_PATH="/mnt/os_images/lfs.img"
   IMAGE_CLONE_PATH="/mnt/os_images/lfs-clone.img"
   LIVE_VM_ISO_PATH="/mnt/os_images/alpine.iso"
@@ -105,8 +105,8 @@ sudo mkdir -p /mnt/lfs-boot /mnt/lfs-root
 sudo mount ${LOOP_DEVICE}p1 /mnt/lfs-boot
 sudo mount ${LOOP_DEVICE}p2 /mnt/lfs-root
 
-echo "[INFO] Copying content from /mnt/lfs/root to /mnt/lfs-root excluding boot..."
-sudo rsync -a --stats --exclude='boot' --exclude='sources' /mnt/lfs/* /mnt/lfs-root/
+echo "[INFO] Copying content from /mnt/lfs/root to /mnt/lfs-root excluding tools and boot..."
+sudo rsync -a --stats --exclude='boot' --exclude='tools' --exclude='sources' /mnt/lfs/* /mnt/lfs-root/
 
 echo "[INFO] Creating inittab, clock, fstab, ifconfig.ens3, resolv.conf, and hostname files..."
 cat >  $CONF_TMP/inittab << "EOF"
@@ -254,11 +254,22 @@ sudo ls -l $LFS_ROOT/etc/init.d/
 # [ -f cni-plugins-linux-amd64-v1.3.0.tgz ] || curl -O -L --silent https://github.com/containernetworking/plugins/releases/download/v1.3.0/cni-plugins-linux-amd64-v1.3.0.tgz
 # sudo tar -xzf cni-plugins-linux-amd64-v1.3.0.tgz -C $LFS_ROOT/usr/lib/cni/
 
+if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
+  GRUB_CONSOLE=tty1
+  GRUB_TARGET=i386-pc
+elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
+  GRUB_CONSOLE=ttyAMA0
+  GRUB_TARGET=arm64-efi
+else
+  echo "[ERROR] Unsupported BUILD_MODE: $BUILD_MODE"
+  exit 1
+fi
+
 sudo mkdir $LFS_ROOT/boot
 echo "[INFO] Content copied successfully."
 
 echo "[INFO] Installing GRUB on /mnt/lfs-boot..."
-sudo grub-install --boot-directory=/mnt/lfs-boot/boot --root-directory=/mnt/lfs-boot --target=i386-pc $LOOP_DEVICE
+sudo grub-install --boot-directory=/mnt/lfs-boot/boot --root-directory=/mnt/lfs-boot --target=$GRUB_TARGET $LOOP_DEVICE
 echo "[INFO] GRUB installation completed successfully with specified root directory."
 echo "[INFO] Partitions mounted successfully."
 
@@ -266,16 +277,8 @@ echo "[INFO] Copying content from /mnt/lfs/boot to /mnt/lfs-boot..."
 sudo cp -a /mnt/lfs/boot/* /mnt/lfs-boot/
 echo "[INFO] Content copied successfully."
 
-if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
-  grub_console=tty1
-elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
-  grub_console=ttyAMA0
-else
-  echo "[ERROR] Unsupported BUILD_MODE: $BUILD_MODE"
-  exit 1
-fi
 
-sudo cat > $CONF_TMP/grub.cfg << "EOF"
+sudo cat > $CONF_TMP/grub.cfg << EOF
 set default=0
 set timeout=10
 
@@ -283,7 +286,7 @@ menuentry "GNU/Linux, Linux 6.13.4-lfs-12.3" {
   set gfxmode=1280x1024
   set gfxpayload=keep
 
-  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro console=$grub_console
+  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro console=${GRUB_CONSOLE}
   # initrd /initrd.img-6.13.4
   # nomodeset
 }
