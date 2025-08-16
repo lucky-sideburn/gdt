@@ -3,8 +3,18 @@
 function create_qemu_vm_from_img() {
   OS_IMAGE_BASE_DIR=./os_images
   VM_NAME=GenericDistroToolkitVM01
+  echo "Creating QEMU VM from image: $OS_IMAGE_BASE_DIR/lfs.img"
   qemu-img convert -f raw -O qcow2 $OS_IMAGE_BASE_DIR/lfs.img $OS_IMAGE_BASE_DIR/lfs.qcow2
-  virt-install --name $VM_NAME --ram 2048 --vcpus 2 --disk path=$OS_IMAGE_BASE_DIR/lfs.qcow2,format=qcow2 --os-type linux --os-variant generic --network network=default --graphics spice --cdrom $OS_IMAGE_BASE_DIR/lfs.iso
+  echo "Starting QEMU VM..."
+qemu-system-aarch64 \
+  -M virt \
+  -cpu cortex-a72 \
+  -smp 2 \
+  -m 2048 \
+  -display default \
+  -drive file=$OS_IMAGE_BASE_DIR/lfs.qcow2,if=virtio,format=qcow2 \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+  -device virtio-net-device,netdev=net0
 }
 
 ansible() {
@@ -131,7 +141,7 @@ function show_menu() {
       ;;
 
     15)
-      echo "Starting AARCH64 VM on QEMU (Vagrant AARCH64 Build Node)..."
+      echo "Preparing AARCH64 VM on QEMU (Vagrant AARCH64 Build Node)..."
       create_qemu_vm_from_img
       ;;
 

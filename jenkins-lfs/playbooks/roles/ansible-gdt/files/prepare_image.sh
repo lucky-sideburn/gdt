@@ -11,8 +11,8 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Validate strategy
-if [[ "$BUILD_MODE" != "host_libvirt" && "$BUILD_MODE" != "vagrant_qemu" ]]; then
-  echo "[ERROR] Invalid strategy: $BUILD_MODE. Allowed values are 'host_libvirt' or 'vagrant_qemu'."
+if [[ "$BUILD_MODE" != "host_libvirt_amd64" && "$BUILD_MODE" != "vagrant_qemu_aarch64" ]]; then
+  echo "[ERROR] Invalid strategy: $BUILD_MODE. Allowed values are 'host_libvirt_amd64' or 'vagrant_qemu_aarch64'."
   exit 1
 fi
 
@@ -266,6 +266,15 @@ echo "[INFO] Copying content from /mnt/lfs/boot to /mnt/lfs-boot..."
 sudo cp -a /mnt/lfs/boot/* /mnt/lfs-boot/
 echo "[INFO] Content copied successfully."
 
+if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
+  grub_console=tty1
+elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
+  grub_console=ttyAMA0
+else
+  echo "[ERROR] Unsupported BUILD_MODE: $BUILD_MODE"
+  exit 1
+fi
+
 sudo cat > $CONF_TMP/grub.cfg << "EOF"
 set default=0
 set timeout=10
@@ -274,7 +283,7 @@ menuentry "GNU/Linux, Linux 6.13.4-lfs-12.3" {
   set gfxmode=1280x1024
   set gfxpayload=keep
 
-  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro console=tty1
+  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro console=$grub_console
   # initrd /initrd.img-6.13.4
   # nomodeset
 }
@@ -344,7 +353,7 @@ sudo ls -lh $IMAGE_PATH
 #echo "[INFO] Copying CA certificates to LFS image completed successfully."
 #sudo cp /etc/ssl/certs/ca-certificates.crt /mnt/lfs/etc/ssl/certs/
 
-if [[ "$BUILD_MODE" == "host_libvirt" ]]; then
+if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
   echo "[INFO] Creating a virtual machine to import LFS image..."
   sudo -i -u ubuntu virt-install \
     --name $VM_NAME \
