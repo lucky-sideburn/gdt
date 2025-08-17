@@ -19,12 +19,12 @@ function create_qemu_vm_from_img() {
       -drive file=$OS_IMAGE_BASE_DIR/lfs-clone.qcow2,if=virtio,format=qcow2 \
       -netdev user,id=net0,hostfwd=tcp::2222-:22 \
       -device virtio-net-device,netdev=net0 \
-      -device virtio-gpu \
+      -device virtio-gpu-pci \
       -device usb-ehci \
       -device usb-kbd \
-      -vga std \
       -display cocoa \
       -bios /opt/homebrew/Cellar/qemu/10.0.3/share/qemu/edk2-aarch64-code.fd \
+      -serial mon:stdio \
       -boot d
 
   echo "Starting the AARCH64 VM with the LFS image..."
@@ -37,12 +37,12 @@ function create_qemu_vm_from_img() {
       -drive file=$OS_IMAGE_BASE_DIR/lfs.qcow2,if=virtio,format=qcow2 \
       -netdev user,id=net0,hostfwd=tcp::2222-:22 \
       -device virtio-net-device,netdev=net0 \
-      -device virtio-gpu \
-      -vga std \
+      -device virtio-gpu-pci \
       -device usb-ehci \
       -device usb-kbd \
-      -display cocoa \
+      -display cocoa\
       -bios /opt/homebrew/Cellar/qemu/10.0.3/share/qemu/edk2-aarch64-code.fd \
+      -serial mon:stdio \
       -boot c
 }
 

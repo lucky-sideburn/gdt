@@ -124,6 +124,24 @@ sudo mount ${LOOP_DEVICE}p2 /mnt/lfs-root
 echo "[INFO] Copying content from /mnt/lfs/root to /mnt/lfs-root excluding tools and boot..."
 sudo rsync -a --stats --exclude='boot' --exclude='tools' --exclude='sources' /mnt/lfs/* /mnt/lfs-root/
 
+
+if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
+  GRUB_CONSOLE="console=tty1"
+  GRUB_TARGET=i386-pc
+  GRUB_DISK_FSTAB="/dev/vda2      /              ext4     defaults            1     1"
+  NET_DEV="ens3"
+elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
+  GRUB_CONSOLE="console=tty0 console=ttyAMA0"
+  GRUB_TARGET=arm64-efi
+  GRUB_DISK_FSTAB="/dev/vda2      /              vfat     defaults            1     1"
+  # TODO: force modern net device name
+  NET_DEV="eth0"
+else
+  echo "[ERROR] Unsupported BUILD_MODE: $BUILD_MODE"
+  exit 1
+fi
+
+
 echo "[INFO] Creating inittab, clock, fstab, ifconfig.ens3, resolv.conf, and hostname files..."
 
 echo "[INFO] Creating $CONF_TMP/inittab"
@@ -156,12 +174,12 @@ EOF
 echo "[INFO] Created inittab file at $CONF_TMP/inittab"
 sudo cat $CONF_TMP/inittab
 
-echo "[INFO] Created ifconfig.ens3 file at $CONF_TMP/ifconfig.ens3"
-sudo tee "$CONF_TMP/ifconfig.ens3" > /dev/null << "EOF"
+echo "[INFO] Created ifconfig.${NET_DEV} file at $CONF_TMP/ifconfig.${NET_DEV}"
+sudo tee "$CONF_TMP/ifconfig.${NET_DEV}" > /dev/null << EOF
 # Network interface configuration
 # This file is written and managed by Ansible of Generic Distro Toolkit
 ONBOOT=yes
-IFACE=ens3
+IFACE=${NET_DEV}
 SERVICE=ipv4-static
 IP=192.168.122.100
 GATEWAY=192.168.122.1
@@ -170,7 +188,7 @@ BROADCAST=192.168.122.255
 
 EOF
 
-sudo cat $CONF_TMP/ifconfig.ens3
+sudo cat $CONF_TMP/ifconfig.$NET_DEV
 
 sudo tee "$CONF_TMP/resolv.conf" > /dev/null << "EOF"
 # DNS configuration
@@ -191,12 +209,12 @@ CLOCKPARAMS=
 
 EOF
 
-sudo tee "$CONF_TMP/fstab" > /dev/null << "EOF"
+sudo tee "$CONF_TMP/fstab" > /dev/null << EOF
 # FSTAB configuration
 # This file is written and managed by Ansible of Generic Distro Toolkit
 
 # file system  mount-point    type     options             dump  fsck order
-/dev/vda1      /boot          ext4     defaults            1     1
+${GRUB_DISK_FSTAB}
 /dev/vda2      /              ext4     defaults            1     1
 proc           /proc          proc     nosuid,noexec,nodev 0     0
 sysfs          /sys           sysfs    nosuid,noexec,nodev 0     0
@@ -279,18 +297,6 @@ sudo ls -l $LFS_ROOT/etc/init.d/
 # TODO
 # [ -f cni-plugins-linux-amd64-v1.3.0.tgz ] || curl -O -L --silent https://github.com/containernetworking/plugins/releases/download/v1.3.0/cni-plugins-linux-amd64-v1.3.0.tgz
 # sudo tar -xzf cni-plugins-linux-amd64-v1.3.0.tgz -C $LFS_ROOT/usr/lib/cni/
-
-if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
-  GRUB_CONSOLE="console=tty1"
-  GRUB_TARGET=i386-pc
-elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
-  GRUB_CONSOLE="console=tty0 console=ttyAMA0"
-  GRUB_TARGET=arm64-efi
-
-else
-  echo "[ERROR] Unsupported BUILD_MODE: $BUILD_MODE"
-  exit 1
-fi
 
 sudo mkdir $LFS_ROOT/boot
 echo "[INFO] Content copied successfully."
