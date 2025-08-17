@@ -301,7 +301,7 @@
         <builders>
           <hudson.tasks.Shell>
         <command>{{ aarch64_common_build_start_command }}
-        export BUILD_MODE=vagrant_qemu
+        export BUILD_MODE=vagrant_qemu_aarch64
         if [ "$(basename {{ item.source_dir }})" != "sources" ]; then
           if [ -d {{ item.source_dir | basename }} ]; then
             sudo rm -rf {{ item.source_dir | basename }}
