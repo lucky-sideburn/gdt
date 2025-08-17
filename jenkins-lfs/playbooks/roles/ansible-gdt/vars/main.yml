@@ -3524,8 +3524,10 @@ jenkins_jobs:
           make clean
 
           echo "Building Kernel for $(uname -m) architecture"
-
+          
+          # TODO ARCH is not necessary
           if [ "$(uname -m)" = "x86_64" ]; then
+            export ARCH=x86_64
             /bin/cp /sources/kernel_configs/kernel_config_x86_64 .config
             make -j$(nproc)
           elif [ "$(uname -m)" = "aarch64" ]; then
@@ -3552,11 +3554,19 @@ jenkins_jobs:
           if [ -d /usr/share/doc/linux-6.13.4 ]; then
             rm -rf /usr/share/doc/linux-6.13.4
           fi
-
-          cp -iv arch/x86/boot/bzImage /boot/vmlinuz-6.13.4-lfs-12.3
-          cp -iv System.map /boot/System.map-6.13.4
-          cp -iv .config /boot/config-6.13.4
-          cp -r Documentation -T /usr/share/doc/linux-6.13.4
+          
+          if [ "$(uname -m)" = "x86_64" ]; then
+            cp -iv arch/x86/boot/bzImage /boot/vmlinuz-6.13.4-lfs-12.3
+            cp -iv System.map /boot/System.map-6.13.4
+            cp -iv .config /boot/config-6.13.4
+            cp -r Documentation -T /usr/share/doc/linux-6.13.4
+          
+          elif [ "$(uname -m)" = "aarch64" ]; then
+            cp -iv arch/arm64/boot/Image /boot/vmlinuz-6.13.4-lfs-12.3
+            cp -iv System.map /boot/System.map-6.13.4
+            cp -iv .config /boot/config-6.13.4
+            cp -r Documentation -T /usr/share/doc/linux-6.13.4
+          fi
         '
 
     - name: 0004 - Prepare System Image (System Configuration)

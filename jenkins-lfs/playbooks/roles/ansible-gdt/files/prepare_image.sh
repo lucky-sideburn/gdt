@@ -2,6 +2,11 @@
 # This script prepares a Linux From Scratch (LFS) image for use with KVM/QEMU
 # Parse arguments
 
+set -euo pipefail
+
+echo "[INFO] Preparing system image and start VM"
+
+echo "[INFO] Parsing arguments..."
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     --buildmode) BUILD_MODE="$2"; shift ;;
@@ -64,15 +69,16 @@ fi
 
 echo "[INFO] Preparing LFS image at $IMAGE_PATH with size $IMAGE_SIZE..."
 if [ -f "$IMAGE_PATH" ]; then
-    sudo rm -f "$IMAGE_PATH"
-    echo "[INFO] Removed existing image at $IMAGE_PATH"
+  sudo rm -f "$IMAGE_PATH"
+  echo "[INFO] Removed existing image at $IMAGE_PATH"
 fi
 
+echo "[INFO] Creating new image at $IMAGE_PATH with size $IMAGE_SIZE..."
 sudo qemu-img create -f raw $IMAGE_PATH 25G
 
 [ -d $IMAGE_CLONE_PATH ] && sudo rm -f $IMAGE_CLONE_PATH 
 
-echo "Unmounting existing partitions..."
+echo "[INFO] Unmounting existing partitions..."
 [ -d /mnt/lfs-boot ] && sudo rm -rf /mnt/lfs-boot/*
 [ -d /mnt/lfs-root ] && sudo rm -rf /mnt/lfs-root/* 
 
@@ -90,14 +96,22 @@ echo "[INFO] Creating loop device..."
 sudo losetup -fP $IMAGE_PATH
 LOOP_DEVICE=$(losetup -l | grep "$IMAGE_PATH" | awk '{print $1}')
 
-echo "[INFO] Creating partitions on $IMAGE_PATH..."
-sudo parted -s $LOOP_DEVICE mklabel msdos
-sudo parted -s $LOOP_DEVICE mkpart primary ext4 1MiB 512MiB
-sudo parted -s $LOOP_DEVICE set 1 boot on
-sudo parted -s $LOOP_DEVICE mkpart primary ext4 512MiB 100%
+echo "[INFO] Creating boot partition on $LOOP_DEVICE"
+if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
+  sudo parted -s $LOOP_DEVICE mklabel msdos
+  sudo parted -s $LOOP_DEVICE mkpart primary ext4 1MiB 512MiB
+  sudo parted -s $LOOP_DEVICE set 1 boot on
+  sudo parted -s $LOOP_DEVICE mkpart primary ext4 512MiB 100%
+  sudo mkfs.ext4 ${LOOP_DEVICE}p1
+elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
+  sudo parted -s $LOOP_DEVICE mklabel gpt
+  sudo parted -s $LOOP_DEVICE mkpart primary fat32 1MiB 512MiB
+  sudo parted -s $LOOP_DEVICE set 1 esp on
+  sudo parted -s $LOOP_DEVICE mkpart primary ext4 512MiB 100%
+  sudo mkfs.fat -F32 ${LOOP_DEVICE}p1
+fi
 
-echo "[INFO] Formatting partitions..."
-sudo mkfs.ext4 ${LOOP_DEVICE}p1
+echo "[INFO] Formatting root partition..."
 sudo mkfs.ext4 ${LOOP_DEVICE}p2
 
 echo "[INFO] Mounting partitions..."
@@ -109,7 +123,7 @@ echo "[INFO] Copying content from /mnt/lfs/root to /mnt/lfs-root excluding tools
 sudo rsync -a --stats --exclude='boot' --exclude='tools' --exclude='sources' /mnt/lfs/* /mnt/lfs-root/
 
 echo "[INFO] Creating inittab, clock, fstab, ifconfig.ens3, resolv.conf, and hostname files..."
-cat >  $CONF_TMP/inittab << "EOF"
+sudo tee >  $CONF_TMP/inittab << "EOF"
 # Begin /etc/inittab
 
 id:3:initdefault:
@@ -138,8 +152,11 @@ s1:1:respawn:/sbin/sulogin
 
 # End /etc/inittab
 EOF
+echo "[INFO] Created inittab file at $CONF_TMP/inittab"
+cat $CONF_TMP/inittab
 
-cat > $CONF_TMP/ifconfig.ens3 << "EOF"
+echo "[INFO] Created ifconfig.ens3 file at $CONF_TMP/ifconfig.ens3"
+sudo tee > $CONF_TMP/ifconfig.ens3 << "EOF"
 ONBOOT=yes
 IFACE=ens3
 SERVICE=ipv4-static
@@ -149,7 +166,10 @@ PREFIX=24
 BROADCAST=192.168.122.255
 EOF
 
-cat > $CONF_TMP/resolv.conf << "EOF"
+echo "[INFO] Created ifconfig.ens3 file at $CONF_TMP/ifconfig.ens3"
+cat $CONF_TMP/ifconfig.ens3
+
+sudo tee > $CONF_TMP/resolv.conf << "EOF"
 # Begin /etc/resolv.conf
 
 domain 0xHrtx.local
@@ -159,7 +179,7 @@ nameserver 8.8.4.4
 # End /etc/resolv.conf
 EOF
 
-cat > $CONF_TMP/clock << "EOF"
+sudo tee > $CONF_TMP/clock << "EOF"
 # Begin /etc/sysconfig/clock
 
 UTC=1
@@ -171,7 +191,7 @@ CLOCKPARAMS=
 # End /etc/sysconfig/clock
 EOF
 
-cat > $CONF_TMP/fstab << "EOF"
+sudo tee > $CONF_TMP/fstab << "EOF"
 # Begin /etc/fstab
 
 # file system  mount-point    type     options             dump  fsck
@@ -192,8 +212,12 @@ EOF
 
 echo $GDT_HOSTNAME > $CONF_TMP/hostname
 
+whoami
+ls -l $LFS_ROOT/etc/inittab
+
 echo "[INFO] Copying configuration files to $LFS_ROOT..."
 sudo /bin/cp $CONF_TMP/inittab           $LFS_ROOT/etc/inittab
+sudo /bin/cp $CONF_TMP/resolv.conf       $LFS_ROOT/etc/resolv.conf
 sudo /bin/cp $CONF_TMP/clock             $LFS_ROOT/etc/sysconfig/clock
 sudo /bin/cp $CONF_TMP/fstab             $LFS_ROOT/etc/fstab
 sudo /bin/cp $CONF_TMP/ifconfig.ens3     $LFS_ROOT/etc/sysconfig/ifconfig.ens3
@@ -255,11 +279,12 @@ sudo ls -l $LFS_ROOT/etc/init.d/
 # sudo tar -xzf cni-plugins-linux-amd64-v1.3.0.tgz -C $LFS_ROOT/usr/lib/cni/
 
 if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
-  GRUB_CONSOLE=tty1
+  GRUB_CONSOLE="console=tty1"
   GRUB_TARGET=i386-pc
 elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
-  GRUB_CONSOLE=ttyAMA0
+  GRUB_CONSOLE="console=tty0 console=ttyAMA0"
   GRUB_TARGET=arm64-efi
+
 else
   echo "[ERROR] Unsupported BUILD_MODE: $BUILD_MODE"
   exit 1
@@ -277,8 +302,8 @@ echo "[INFO] Copying content from /mnt/lfs/boot to /mnt/lfs-boot..."
 sudo cp -a /mnt/lfs/boot/* /mnt/lfs-boot/
 echo "[INFO] Content copied successfully."
 
-
-sudo cat > $CONF_TMP/grub.cfg << EOF
+echo "[INFO] Creating GRUB configuration file..."
+sudo tee > $CONF_TMP/grub.cfg << EOF
 set default=0
 set timeout=10
 
@@ -286,13 +311,17 @@ menuentry "GNU/Linux, Linux 6.13.4-lfs-12.3" {
   set gfxmode=1280x1024
   set gfxpayload=keep
 
-  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro console=${GRUB_CONSOLE}
+  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro ${GRUB_CONSOLE}
   # initrd /initrd.img-6.13.4
   # nomodeset
 }
 EOF
+echo "[INFO] GRUB configuration file created successfully."
+cat $CONF_TMP/grub.cfg
+
 
 [ -d /mnt/lfs-boot/boot/grub ] || sudo mkdir -p /mnt/lfs-boot/boot/grub
+echo "[INFO] Copying GRUB configuration file to /mnt/lfs-boot/boot/grub/grub.cfg"
 sudo cp $CONF_TMP/grub.cfg /mnt/lfs-boot/boot/grub/grub.cfg
 
 # mkdir -p initramfs/{bin,sbin,etc,proc,sys,newroot}
@@ -305,6 +334,7 @@ sudo cp $CONF_TMP/grub.cfg /mnt/lfs-boot/boot/grub/grub.cfg
 # EOF
 # chmod +x initramfs/init
 
+echo "[INFO] Preparing chroot environment and create things like init scripts"
 sudo chroot "$LFS_ROOT" /usr/bin/env -i   \
     HOME=/root                  \
     TERM="$TERM"                \
@@ -332,6 +362,9 @@ sudo chroot "$LFS_ROOT" /usr/bin/env -i   \
         # /usr/sbin/mkinitramfs 6.13.4
     '
 
+echo "[INFO] Chroot environment setup completed successfully."
+
+echo "[INFO] Unmounting partitions /mnt/lfs-boot and /mnt/lfs-root..."
 sudo umount /mnt/lfs-boot
 sudo umount /mnt/lfs-root
 
@@ -356,6 +389,7 @@ sudo ls -lh $IMAGE_PATH
 #echo "[INFO] Copying CA certificates to LFS image completed successfully."
 #sudo cp /etc/ssl/certs/ca-certificates.crt /mnt/lfs/etc/ssl/certs/
 
+## Create and start VMs
 if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
   echo "[INFO] Creating a virtual machine to import LFS image..."
   sudo -i -u ubuntu virt-install \
