@@ -61,7 +61,7 @@ ansible_cmd() {
     echo
   fi
 
-  ansible_cmd="ansible-playbook -i jenkins-lfs/inventories/hosts_prod.ini jenkins-lfs/playbooks/start.yml "
+  ansible-playbook -i jenkins-lfs/inventories/hosts_prod.ini jenkins-lfs/playbooks/start.yml "$@"
 }
 
 function show_menu() {
