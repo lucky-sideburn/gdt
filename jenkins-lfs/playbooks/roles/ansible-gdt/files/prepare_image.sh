@@ -2,9 +2,7 @@
 # This script prepares a Linux From Scratch (LFS) image for use with KVM/QEMU
 # Parse arguments
 
-set -euo pipefail
-
-echo "[INFO] Preparing system image and start VM"
+echo "[INFO] Preparing system image and start VM..."
 
 echo "[INFO] Parsing arguments..."
 while [[ "$#" -gt 0 ]]; do
@@ -85,8 +83,12 @@ echo "[INFO] Unmounting existing partitions..."
 echo "[INFO] Unmounting all loop devices..."
 LOOP_DEVICES=$(losetup -l | awk '{print $1}' | grep '/dev/loop')
 for DEVICE in $LOOP_DEVICES; do
-  sudo umount ${DEVICE}p1 || true
-  sudo umount ${DEVICE}p2 || true
+  if mount | grep -q "${DEVICE}p1"; then
+    sudo umount ${DEVICE}p1
+  fi
+  if mount | grep -q "${DEVICE}p2"; then
+    sudo umount ${DEVICE}p2
+  fi
 done
 
 echo "[INFO] Cleaning up old loop devices..."
@@ -123,23 +125,22 @@ echo "[INFO] Copying content from /mnt/lfs/root to /mnt/lfs-root excluding tools
 sudo rsync -a --stats --exclude='boot' --exclude='tools' --exclude='sources' /mnt/lfs/* /mnt/lfs-root/
 
 echo "[INFO] Creating inittab, clock, fstab, ifconfig.ens3, resolv.conf, and hostname files..."
-sudo tee >  $CONF_TMP/inittab << "EOF"
-# Begin /etc/inittab
 
+echo "[INFO] Creating $CONF_TMP/inittab"
+sudo tee "$CONF_TMP/inittab" > /dev/null << "EOF"
+# System initialization
+# This file is written and managed by Ansible of Generic Distro Toolkit
 id:3:initdefault:
-
 si::sysinit:/etc/rc.d/init.d/rc S
-
-l0:0:wait:/etc/rc.d/init.d/rc 0
-l1:S1:wait:/etc/rc.d/init.d/rc 1
-l2:2:wait:/etc/rc.d/init.d/rc 2
-l3:3:wait:/etc/rc.d/init.d/rc 3
-l4:4:wait:/etc/rc.d/init.d/rc 4
-l5:5:wait:/etc/rc.d/init.d/rc 5
-l6:6:wait:/etc/rc.d/init.d/rc 6
+l0:0:wait:/etc/rc.d/init.d/rc   0
+l1:S1:wait:/etc/rc.d/init.d/rc  1
+l2:2:wait:/etc/rc.d/init.d/rc   2
+l3:3:wait:/etc/rc.d/init.d/rc   3
+l4:4:wait:/etc/rc.d/init.d/rc   4
+l5:5:wait:/etc/rc.d/init.d/rc   5
+l6:6:wait:/etc/rc.d/init.d/rc   6
 
 ca:12345:ctrlaltdel:/sbin/shutdown -t1 -a -r now
-
 su:S06:once:/sbin/sulogin
 s1:1:respawn:/sbin/sulogin
 
@@ -150,13 +151,15 @@ s1:1:respawn:/sbin/sulogin
 5:2345:respawn:/sbin/agetty tty5 9600
 6:2345:respawn:/sbin/agetty tty6 9600
 
-# End /etc/inittab
 EOF
+
 echo "[INFO] Created inittab file at $CONF_TMP/inittab"
-cat $CONF_TMP/inittab
+sudo cat $CONF_TMP/inittab
 
 echo "[INFO] Created ifconfig.ens3 file at $CONF_TMP/ifconfig.ens3"
-sudo tee > $CONF_TMP/ifconfig.ens3 << "EOF"
+sudo tee "$CONF_TMP/ifconfig.ens3" > /dev/null << "EOF"
+# Network interface configuration
+# This file is written and managed by Ansible of Generic Distro Toolkit
 ONBOOT=yes
 IFACE=ens3
 SERVICE=ipv4-static
@@ -164,39 +167,35 @@ IP=192.168.122.100
 GATEWAY=192.168.122.1
 PREFIX=24
 BROADCAST=192.168.122.255
+
 EOF
 
-echo "[INFO] Created ifconfig.ens3 file at $CONF_TMP/ifconfig.ens3"
-cat $CONF_TMP/ifconfig.ens3
+sudo cat $CONF_TMP/ifconfig.ens3
 
-sudo tee > $CONF_TMP/resolv.conf << "EOF"
-# Begin /etc/resolv.conf
-
+sudo tee "$CONF_TMP/resolv.conf" > /dev/null << "EOF"
+# DNS configuration
+# This file is written and managed by Ansible of Generic Distro Toolkit
 domain 0xHrtx.local
 nameserver 8.8.8.8
 nameserver 8.8.4.4
 
-# End /etc/resolv.conf
 EOF
 
-sudo tee > $CONF_TMP/clock << "EOF"
-# Begin /etc/sysconfig/clock
-
+sudo tee "$CONF_TMP/clock" > /dev/null << "EOF"
+# Clock configuration
+# This file is written and managed by Ansible of Generic Distro Toolkit
 UTC=1
-
 # Set this to any options you might need to give to hwclock,
 # such as machine hardware clock type for Alphas.
 CLOCKPARAMS=
 
-# End /etc/sysconfig/clock
 EOF
 
-sudo tee > $CONF_TMP/fstab << "EOF"
-# Begin /etc/fstab
+sudo tee "$CONF_TMP/fstab" > /dev/null << "EOF"
+# FSTAB configuration
+# This file is written and managed by Ansible of Generic Distro Toolkit
 
-# file system  mount-point    type     options             dump  fsck
-#                                                                order
-
+# file system  mount-point    type     options             dump  fsck order
 /dev/vda1      /boot          ext4     defaults            1     1
 /dev/vda2      /              ext4     defaults            1     1
 proc           /proc          proc     nosuid,noexec,nodev 0     0
@@ -207,13 +206,16 @@ devtmpfs       /dev           devtmpfs mode=0755,nosuid    0     0
 tmpfs          /dev/shm       tmpfs    nosuid,nodev        0     0
 cgroup2        /sys/fs/cgroup cgroup2  nosuid,noexec,nodev 0     0
 
-# End /etc/fstab
 EOF
 
-echo $GDT_HOSTNAME > $CONF_TMP/hostname
+echo "[INFO] Created hostname file at $CONF_TMP/hostname"
+sudo tee "$CONF_TMP/hostname" > /dev/null << "EOF"
+# Hostname configuration
+# This file is written and managed by Ansible of Generic Distro Toolkit
+$GDT_HOSTNAME 
+EOF
 
-whoami
-ls -l $LFS_ROOT/etc/inittab
+sudo cat $CONF_TMP/hostname
 
 echo "[INFO] Copying configuration files to $LFS_ROOT..."
 sudo /bin/cp $CONF_TMP/inittab           $LFS_ROOT/etc/inittab
@@ -303,7 +305,8 @@ sudo cp -a /mnt/lfs/boot/* /mnt/lfs-boot/
 echo "[INFO] Content copied successfully."
 
 echo "[INFO] Creating GRUB configuration file..."
-sudo tee > $CONF_TMP/grub.cfg << EOF
+
+sudo tee "$CONF_TMP/grub.cfg" > /dev/null << EOF
 set default=0
 set timeout=10
 
@@ -311,18 +314,17 @@ menuentry "GNU/Linux, Linux 6.13.4-lfs-12.3" {
   set gfxmode=1280x1024
   set gfxpayload=keep
 
-  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro ${GRUB_CONSOLE}
+  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro ${GRUB_CONSOLE} nomodeset debug earlyprintk=efi,keep
   # initrd /initrd.img-6.13.4
-  # nomodeset
 }
+
 EOF
 echo "[INFO] GRUB configuration file created successfully."
-cat $CONF_TMP/grub.cfg
-
+sudo cat $CONF_TMP/grub.cfg
 
 [ -d /mnt/lfs-boot/boot/grub ] || sudo mkdir -p /mnt/lfs-boot/boot/grub
 echo "[INFO] Copying GRUB configuration file to /mnt/lfs-boot/boot/grub/grub.cfg"
-sudo cp $CONF_TMP/grub.cfg /mnt/lfs-boot/boot/grub/grub.cfg
+sudo sudo cp $CONF_TMP/grub.cfg /mnt/lfs-boot/boot/grub/grub.cfg
 
 # mkdir -p initramfs/{bin,sbin,etc,proc,sys,newroot}
 # cat > initramfs/init << 'EOF'
@@ -373,11 +375,22 @@ sudo cp -a $IMAGE_PATH $IMAGE_CLONE_PATH
 echo "[INFO] Image cloned successfully to $IMAGE_CLONE_PATH."
 
 echo "[INFO] Verifying no loop devices are mounted..."
-MOUNTED_LOOP_DEVICES=$(losetup -l | awk '{print $1}' | grep '/dev/loop')
+MOUNTED_LOOP_DEVICES=$(sudo mount | grep "/dev/loop" | awk '{print $1}')
+
+if [ -z "$MOUNTED_LOOP_DEVICES" ]; then
+  echo "[INFO] No loop devices are mounted."
+else
+  echo "[INFO] Loop devices currently mounted:"
+  echo "$MOUNTED_LOOP_DEVICES"
+fi
+
 if [ -n "$MOUNTED_LOOP_DEVICES" ]; then
   echo "[INFO] Some loop devices are still mounted:"
   echo "$MOUNTED_LOOP_DEVICES"
-  sudo umount $MOUNTED_LOOP_DEVICES
+  for dev in $MOUNTED_LOOP_DEVICES; do
+    echo "[INFO] Unmounting $dev..."
+    sudo umount "$dev" || echo "failing to unmount $dev"
+  done
 else
   echo "[INFO] No loop devices are mounted."
 fi
