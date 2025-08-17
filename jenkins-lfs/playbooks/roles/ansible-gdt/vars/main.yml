@@ -61,9 +61,7 @@ amd64_common_build_start_command: |-
   LFS=/mnt/lfs
   LC_ALL=POSIX
   LFS_TGT=$(uname -m)-lfs-linux-gnu
-  PATH=/usr/bin
-  if [ ! -L /bin ]; then PATH=/bin:$PATH; fi
-  PATH=$LFS/tools/bin:$PATH
+  PATH=$LFS/tools/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/bin
   CONFIG_SITE=$LFS/usr/share/config.site
   export LFS LC_ALL LFS_TGT PATH CONFIG_SITE
   export MAKEFLAGS=-j$(nproc)
@@ -79,9 +77,7 @@ aarch64_common_build_start_command: |-
   LFS=/mnt/lfs
   LC_ALL=POSIX
   LFS_TGT=$(uname -m)-lfs-linux-gnu
-  PATH=/usr/bin
-  if [ ! -L /bin ]; then PATH=/bin:$PATH; fi
-  PATH=$LFS/tools/bin:$PATH
+  PATH=$LFS/tools/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/bin
   CONFIG_SITE=$LFS/usr/share/config.site
   export LFS LC_ALL LFS_TGT PATH CONFIG_SITE
   export MAKEFLAGS=-j$(nproc)
