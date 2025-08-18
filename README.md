@@ -12,31 +12,7 @@ gdt (Generic Distro Toolkit) is a work-in-progress.
 
 The operating system can be built by following Jenkins numbered builds.
 
-NOTE: When you are on aarch64_basic_system_software and reboot the aarch64 build node, remember to launch 0001 - Changing Ownership and Preparing Virtual Kernel File Systems (Chroot and Building Additional Temporary Tools) or ensure that the virtual systems are mounted.
-
-TODO: Automate this process at the boot of the aarch64 build node if a successful provision has already been made and the machine has been restarted.
-
-```bash
-        if ! mountpoint -q $LFS/dev; then
-          sudo mount -v --bind /dev $LFS/dev
-        fi
-
-        if ! mountpoint -q $LFS/dev/pts; then
-          sudo mount -vt devpts devpts -o gid=5,mode=0620 $LFS/dev/pts
-        fi
-
-        if ! mountpoint -q $LFS/proc; then
-          sudo mount -vt proc proc $LFS/proc
-        fi
-
-        if ! mountpoint -q $LFS/sys; then
-          sudo mount -vt sysfs sysfs $LFS/sys
-        fi
-
-        if ! mountpoint -q $LFS/run; then
-          sudo mount -vt tmpfs tmpfs $LFS/run
-        fi    
-```
+Default root password is luckysideburn.123
 
 ```bash
 aarch64_cross_toolchain - amd64_cross_toolchain
@@ -198,6 +174,32 @@ aarch64_containers - amd64_containers
  └─0003 - etcd             (Containers)
  └─0004 - kubernetes       (Containers)
  └─0005 - kubernetes-setup (Containers)
+```
+
+NOTE: When you are on aarch64_basic_system_software and reboot the aarch64 build node, remember to launch 0001 - Changing Ownership and Preparing Virtual Kernel File Systems (Chroot and Building Additional Temporary Tools) or ensure that the virtual systems are mounted.
+
+TODO: Automate this process at the boot of the aarch64 build node if a successful provision has already been made and the machine has been restarted.
+
+```bash
+        if ! mountpoint -q $LFS/dev; then
+          sudo mount -v --bind /dev $LFS/dev
+        fi
+
+        if ! mountpoint -q $LFS/dev/pts; then
+          sudo mount -vt devpts devpts -o gid=5,mode=0620 $LFS/dev/pts
+        fi
+
+        if ! mountpoint -q $LFS/proc; then
+          sudo mount -vt proc proc $LFS/proc
+        fi
+
+        if ! mountpoint -q $LFS/sys; then
+          sudo mount -vt sysfs sysfs $LFS/sys
+        fi
+
+        if ! mountpoint -q $LFS/run; then
+          sudo mount -vt tmpfs tmpfs $LFS/run
+        fi    
 ```
 
 #### LFS Numbered Folders (follow the order)

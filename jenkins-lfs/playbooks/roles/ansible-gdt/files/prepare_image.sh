@@ -130,22 +130,24 @@ if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
   GRUB_TARGET=i386-pc
   GRUB_DISK_FSTAB="/dev/vda2      /              ext4     defaults            1     1"
   NET_DEV="ens3"
+  INITTAB_EXTRA_LINE=""
 elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
-  GRUB_CONSOLE="console=tty0 console=ttyAMA0"
+  GRUB_CONSOLE="console=ttyAMA0"
   GRUB_TARGET=arm64-efi
   GRUB_DISK_FSTAB="/dev/vda2      /              vfat     defaults            1     1"
   # TODO: force modern net device name
   NET_DEV="eth0"
+  INITTAB_EXTRA_LINE="AMA0:2345:respawn:/sbin/agetty ttyAMA0 9600"
 else
   echo "[ERROR] Unsupported BUILD_MODE: $BUILD_MODE"
   exit 1
 fi
 
 
-echo "[INFO] Creating inittab, clock, fstab, ifconfig.ens3, resolv.conf, and hostname files..."
+echo "[INFO] Creating inittab, clock, fstab, ifconfig.$NET_DEV, resolv.conf, and hostname files..."
 
 echo "[INFO] Creating $CONF_TMP/inittab"
-sudo tee "$CONF_TMP/inittab" > /dev/null << "EOF"
+sudo tee "$CONF_TMP/inittab" > /dev/null << EOF
 # System initialization
 # This file is written and managed by Ansible of Generic Distro Toolkit
 id:3:initdefault:
@@ -168,6 +170,7 @@ s1:1:respawn:/sbin/sulogin
 4:2345:respawn:/sbin/agetty tty4 9600
 5:2345:respawn:/sbin/agetty tty5 9600
 6:2345:respawn:/sbin/agetty tty6 9600
+${INITTAB_EXTRA_LINE}
 
 EOF
 
@@ -178,7 +181,7 @@ echo "[INFO] Created ifconfig.${NET_DEV} file at $CONF_TMP/ifconfig.${NET_DEV}"
 sudo tee "$CONF_TMP/ifconfig.${NET_DEV}" > /dev/null << EOF
 # Network interface configuration
 # This file is written and managed by Ansible of Generic Distro Toolkit
-ONBOOT=yes
+ONBOOT=no
 IFACE=${NET_DEV}
 SERVICE=ipv4-static
 IP=192.168.122.100
@@ -227,26 +230,26 @@ cgroup2        /sys/fs/cgroup cgroup2  nosuid,noexec,nodev 0     0
 EOF
 
 echo "[INFO] Created hostname file at $CONF_TMP/hostname"
-sudo tee "$CONF_TMP/hostname" > /dev/null << "EOF"
+sudo tee "$CONF_TMP/hostname" > /dev/null << EOF
 # Hostname configuration
 # This file is written and managed by Ansible of Generic Distro Toolkit
-$GDT_HOSTNAME 
+${GDT_HOSTNAME}
 EOF
 
 sudo cat $CONF_TMP/hostname
 
 echo "[INFO] Copying configuration files to $LFS_ROOT..."
-sudo /bin/cp $CONF_TMP/inittab           $LFS_ROOT/etc/inittab
-sudo /bin/cp $CONF_TMP/resolv.conf       $LFS_ROOT/etc/resolv.conf
-sudo /bin/cp $CONF_TMP/clock             $LFS_ROOT/etc/sysconfig/clock
-sudo /bin/cp $CONF_TMP/fstab             $LFS_ROOT/etc/fstab
-sudo /bin/cp $CONF_TMP/ifconfig.ens3     $LFS_ROOT/etc/sysconfig/ifconfig.ens3
-sudo /bin/cp $CONF_TMP/hostname          $LFS_ROOT/etc/hostname
-sudo /bin/cp $CONF_TMP/profile           $LFS_ROOT/etc/profile
-sudo /bin/cp $CONF_TMP/sysctl.conf       $LFS_ROOT/etc/sysctl.conf
-sudo /bin/cp $CONF_TMP/hosts             $LFS_ROOT/etc/hosts
-sudo /bin/cp $CONF_TMP/environment       $LFS_ROOT/etc/environment
-sudo /bin/cp $CONF_TMP/bash_profile      $LFS_ROOT/root/.bash_profile
+sudo /bin/cp $CONF_TMP/inittab               $LFS_ROOT/etc/inittab
+sudo /bin/cp $CONF_TMP/resolv.conf           $LFS_ROOT/etc/resolv.conf
+sudo /bin/cp $CONF_TMP/clock                 $LFS_ROOT/etc/sysconfig/clock
+sudo /bin/cp $CONF_TMP/fstab                 $LFS_ROOT/etc/fstab
+sudo /bin/cp $CONF_TMP/ifconfig.$NET_DEV     $LFS_ROOT/etc/sysconfig/ifconfig.$NET_DEV
+sudo /bin/cp $CONF_TMP/hostname              $LFS_ROOT/etc/hostname
+sudo /bin/cp $CONF_TMP/profile               $LFS_ROOT/etc/profile
+sudo /bin/cp $CONF_TMP/sysctl.conf           $LFS_ROOT/etc/sysctl.conf
+sudo /bin/cp $CONF_TMP/hosts                 $LFS_ROOT/etc/hosts
+sudo /bin/cp $CONF_TMP/environment           $LFS_ROOT/etc/environment
+sudo /bin/cp $CONF_TMP/bash_profile          $LFS_ROOT/root/.bash_profile
 
 # Containers and CRI-O configuration
 # [ -d $LFS_ROOT/etc/containers ]           || sudo mkdir -p $LFS_ROOT/etc/containers
@@ -342,7 +345,7 @@ sudo sudo cp $CONF_TMP/grub.cfg /mnt/lfs-boot/boot/grub/grub.cfg
 # EOF
 # chmod +x initramfs/init
 
-echo "[INFO] Preparing chroot environment and create things like init scripts"
+echo "[INFO] Preparing chroot environment, default root password and create things like init scripts"
 sudo chroot "$LFS_ROOT" /usr/bin/env -i   \
     HOME=/root                  \
     TERM="$TERM"                \
@@ -352,21 +355,24 @@ sudo chroot "$LFS_ROOT" /usr/bin/env -i   \
     TESTSUITEFLAGS="-j$(nproc)" \
     /bin/bash \
     -c '
-        # TODO
+        
+        # TODO: Not use clear password
+        echo "luckysideburn.123" | passwd --stdin root
+
+        # TODO: Implement and test init scripts
         # chmod +x /etc/init.d/crio
         # ls /etc/rc.d/rc3.d/S91crio || ln -s /etc/init.d/crio /etc/rc.d/rc3.d/S91crio
         # ls /etc/rc.d/rc5.d/S91crio || ln -s /etc/init.d/crio /etc/rc.d/rc5.d/S91crio
         # ls /etc/rc.d/rc0.d/K91crio || ln -s /etc/init.d/crio /etc/rc.d/rc0.d/K91crio
         # ls /etc/rc.d/rc6.d/K91crio || ln -s /etc/init.d/crio /etc/rc.d/rc6.d/K91crio
-
         # chmod +x /etc/init.d/kubelet
         # ls /etc/rc.d/rc3.d/S92kubelet || ln -s /etc/init.d/kubelet /etc/rc.d/rc3.d/S92kubelet
         # ls /etc/rc.d/rc5.d/S92kubelet || ln -s /etc/init.d/kubelet /etc/rc.d/rc5.d/S92kubelet
         # ls /etc/rc.d/rc0.d/K92kubelet || ln -s /etc/init.d/kubelet /etc/rc.d/rc0.d/K92kubelet
         # ls /etc/rc.d/rc6.d/K92kubelet || ln -s /etc/init.d/kubelet /etc/rc.d/rc6.d/K92kubelet
 
-        # ls /lib/libzstd.so.1
-  
+        # TODO: Should I use initramfs? 
+        # ls /lib/libzstd.so.1  
         # /usr/sbin/mkinitramfs 6.13.4
     '
 
