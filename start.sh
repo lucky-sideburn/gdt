@@ -3,7 +3,7 @@
 function create_qemu_vm_from_img() {
   OS_IMAGE_BASE_DIR=./os_images
   VM_NAME=GenericDistroToolkitVM01
-  [ -f $OS_IMAGE_BASE_DIR/lfs.qcow2 ] && rm -f $OS_IMAGE_BASE_DIR/lfs.qcow2
+  #[ -f $OS_IMAGE_BASE_DIR/lfs.qcow2 ] && rm -f $OS_IMAGE_BASE_DIR/lfs.qcow2
   # echo "Creating QEMU VM from image: $OS_IMAGE_BASE_DIR/lfs.img"
   qemu-img convert -f raw -O qcow2 $OS_IMAGE_BASE_DIR/lfs.img $OS_IMAGE_BASE_DIR/lfs.qcow2
   qemu-img convert -f raw -O qcow2 $OS_IMAGE_BASE_DIR/lfs-clone.img $OS_IMAGE_BASE_DIR/lfs-clone.qcow2
@@ -17,6 +17,7 @@ function create_qemu_vm_from_img() {
       -m 2048 \
       -drive file=$OS_IMAGE_BASE_DIR/alpine.iso,if=virtio,media=cdrom \
       -drive file=$OS_IMAGE_BASE_DIR/lfs-clone.qcow2,if=virtio,format=qcow2 \
+      -drive file=$OS_IMAGE_BASE_DIR/lfs.qcow2,if=virtio,format=qcow2 \
       -netdev user,id=net0,hostfwd=tcp::2222-:22 \
       -device virtio-net-device,netdev=net0 \
       -device virtio-gpu-pci \
@@ -27,7 +28,7 @@ function create_qemu_vm_from_img() {
       -serial mon:stdio \
       -boot d
 
-  echo "Starting the AARCH64 VM with the LFS image..."
+  # echo "Starting the AARCH64 VM with the LFS image..."
   qemu-system-aarch64 \
       -M virt \
       -cpu host \
@@ -40,7 +41,7 @@ function create_qemu_vm_from_img() {
       -device virtio-gpu-pci \
       -device usb-ehci \
       -device usb-kbd \
-      -display cocoa\
+      -display cocoa \
       -bios /opt/homebrew/Cellar/qemu/10.0.3/share/qemu/edk2-aarch64-code.fd \
       -serial mon:stdio \
       -boot c

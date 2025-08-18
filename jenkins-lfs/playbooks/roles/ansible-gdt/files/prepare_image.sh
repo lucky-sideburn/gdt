@@ -26,11 +26,13 @@ if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
   IMAGE_PATH="/var/lib/libvirt/images/lfs.img"
   IMAGE_CLONE_PATH="/var/lib/libvirt/images/lfs-clone.img"
   LIVE_VM_ISO_PATH="/var/lib/libvirt/images/alpine.iso"
+  GDT_HOSTNAME="devbox-amd64"
 elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
   echo "[INFO] BUILD_MODE is set to vagrant_qemu_aarch64. Proceeding with Vagrant-specific setup..."
   IMAGE_PATH="/mnt/os_images/lfs.img"
   IMAGE_CLONE_PATH="/mnt/os_images/lfs-clone.img"
   LIVE_VM_ISO_PATH="/mnt/os_images/alpine.iso"
+  GDT_HOSTNAME="devbox-aarch64"
   [ ! -f  $LIVE_VM_ISO_PATH ] && (echo "[ERROR] Please put alpine.iso in $LIVE_VM_ISO_PATH" && exit 1)
 fi
 
@@ -41,7 +43,6 @@ VIRSH_POOL="default"
 VIRSH_NETWORK="default"
 LOOP_DEVICE=$(losetup -l | grep "$IMAGE_PATH" | awk '{print $1}')
 CONF_TMP="/mnt/lfs/sources/conf_tmp"
-GDT_HOSTNAME="0xHrtz"
 LFS_ROOT="/mnt/lfs-root"
 export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin"
 
