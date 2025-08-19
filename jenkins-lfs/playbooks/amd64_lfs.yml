@@ -1,6 +1,6 @@
 - name: Print node name
-  hosts: ubuntu-arm-lfs
   gather_facts: true
+  hosts: all
   tasks:
     - name: Display the node name
       debug:
