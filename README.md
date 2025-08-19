@@ -1,6 +1,8 @@
 # Generic Distro Toolkit for GNU/Linux
 ## Another approach to ALFS (Automated Linux From Scratch)
 
+![LFS Build Process](images/lfs1.gif)
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Project Overview
@@ -8,7 +10,6 @@
 I’m building GNU/Linux following LFS (Linux From Scratch) with Ansible and Jenkins. This project is a general-purpose framework for building Linux distributions in a semi-automated and DevOps way.
 
 gdt (Generic Distro Toolkit) is a work-in-progress.
-
 
 ### Project Structure
 
