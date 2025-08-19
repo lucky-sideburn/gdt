@@ -129,13 +129,13 @@ sudo rsync -a --stats --exclude='boot' --exclude='tools' --exclude='sources' /mn
 if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
   GRUB_CONSOLE="console=tty1"
   GRUB_TARGET=i386-pc
-  GRUB_DISK_FSTAB="/dev/vda2      /              ext4     defaults            1     1"
+  GRUB_DISK_FSTAB="/dev/vda1      /boot              ext4     defaults            1     1"
   NET_DEV="ens3"
   INITTAB_EXTRA_LINE=""
 elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
   GRUB_CONSOLE="console=ttyAMA0"
   GRUB_TARGET=arm64-efi
-  GRUB_DISK_FSTAB="/dev/vda2      /              vfat     defaults            1     1"
+  GRUB_DISK_FSTAB="/dev/vda1      /boot             vfat     defaults            1     1"
   # TODO: force modern net device name
   NET_DEV="eth0"
   INITTAB_EXTRA_LINE="AMA0:2345:respawn:/sbin/agetty ttyAMA0 9600"
@@ -324,7 +324,7 @@ menuentry "GNU/Linux, Linux 6.13.4-lfs-12.3" {
   set gfxmode=1280x1024
   set gfxpayload=keep
 
-  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro ${GRUB_CONSOLE} nomodeset debug earlyprintk=efi,keep
+  linux /vmlinuz-6.13.4-lfs-12.3 root=/dev/vda2 ro nomodeset debug earlyprintk=efi,keep ${GRUB_CONSOLE}
   # initrd /initrd.img-6.13.4
 }
 
