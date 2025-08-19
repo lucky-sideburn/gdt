@@ -83,7 +83,9 @@ function show_menu() {
   echo "13) Build AARCH64 system_configuration Jenkins Jobs"
   echo "14) Build AARCH64 containers Jenkins Jobs"
   echo "15) Start AARCH64 VM on QEMU"
-  echo "16) Exit"
+  echo "16) Provision AARCH64 build node with vagrant provision"
+  echo "17) Provision AMD64 build node directly through Ansible"
+  echo "18) Exit"
 
   echo
   read -p "Enter your choice: " choice
@@ -176,6 +178,17 @@ function show_menu() {
       ;;
 
     16)
+      echo "Provisioning AARCH64 build node with vagrant provision..."
+
+      ([ -f Vagrantfile ] && vagrant provision) || echo "Error. Vagrantfile not found"
+      ;;
+
+    17)
+      echo "Provisioning AMD64 build node directly through Ansible..."
+      ansible-playbook -i jenkins-lfs/inventories/hosts_prod.ini jenkins-lfs/playbooks/amd64_lfs.yml
+      ;;
+
+    18)
       echo "Exiting..."
       exit 0
       ;;
