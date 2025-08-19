@@ -36,14 +36,51 @@ Generic-Distro-ToolK1t/
 └── Vagrantfile                # Defines the aarch64 build node (amd64 builds run directly on Jenkins master for now)
 ```
 
-### Build amd64 GNU/Linux Operating System
+# Prerequisites
 
-to do...
+* Before starting the operating system build, ensure you have a Jenkins server to coordinate the agent.
+* For building AMD64 or AARCH64, enable KVM and install libvirt, QEMU, and Cockpit.
+
+Notes:  
+* For AMD64, I used a physical server with both the Jenkins Master and Agent running on the same node.  
+* For AARCH64, I used my laptop with a VM acting as the Jenkins Agent, connected to a Jenkins Master (you can provision the master wherever you prefer).  
+
+### Build AMD64 - GNU/Linux Operating System
+
+1. Clone this repo
+2. Run start.sh and select *17) Provision an AMD64 build node directly with Ansible*
+3. Run start.sh and create Jenkins folders 
+```bash
+    0)  Create Jenkins Folders
+    1)  Build AMD64 all Jenkins Jobs
+    2)  Build AMD64 cross_toolchain Jenkins Jobs
+    3)  Build AMD64 cross_compiling_temporary_tools Jenkins Jobs
+    4)  Build AMD64 chroot_and_building_additional_temporary_tools Jenkins Jobs
+    5)  Build AMD64 basic_system_software Jenkins Jobs
+    6)  Build AMD64 system_configuration Jenkins Jobs
+    7)  Build AMD64 containers Jenkins Jobs
+```
+4. Run Jenkins jobs in the order of the numbered folders and jobs.
+5. The job *0004 - Prepare System Image (System Configuration)* will start the VMs, which can be monitored using Cockpit.
 
 
-### Build aarch64 GNU/Linux Operating System
+### Build AARCH64 - GNU/Linux Operating System
 
-to do...
+1. Clone this repo
+2. Run start.sh and select *16) Provision an AARCH64 build node using Vagrant*
+3. Run start.sh and create Jenkins folders 
+```bash
+    0)  Create Jenkins Folders
+    8)  Build AARCH64 all Jenkins Jobs
+    9)  Build AARCH64 cross_toolchain Jenkins Jobs
+    10) Build AARCH64 cross_compiling_temporary_tools Jenkins Jobs
+    11) Build AARCH64 chroot_and_building_additional_temporary_tools Jenkins Jobs
+    12) Build AARCH64 basic_system_software Jenkins Jobs
+    13) Build AARCH64 system_configuration Jenkins Jobs
+    14) Build AARCH64 containers Jenkins Jobs
+```
+4. Run Jenkins jobs in the order of the numbered folders and jobs.
+5. Run `start.sh` and select *15) Start AARCH64 VM on QEMU* to work on your GNU/Linux system.
 
 ### LFS Numbered Job Jenkins
 
@@ -244,122 +281,3 @@ TODO: Automate this process at the boot of the aarch64 build node if a successfu
 Ensure you follow the sequence of numbered folders during the LFS build process. Each folder corresponds to a specific step, and skipping or rearranging them may lead to errors or inconsistencies in the build.
 
 ![LFS Numbered Folders](images/numbered_folders.png)
-
-
-### Step 0 - Install required tools
-
-#### LFS Build Server
-
-* Jenkins
-* Redmine
-* Enable KVM
-* Libvirt, QEMU
-* Cockpit
-* Redmine (if you want track your progress)
-
-
-#### LFS Build Node aarch64
-
-**Launch export JENKINS_AGENT_SECRET=xxx before vagrant provision**
-**Launch export JENKINS_DOWNLOAD_LFS_ARCHIVES=true if you want packages archives**
-
-```bash
-[foobar@homer]:~/WORK/Generic-Distro-ToolK1t $ vagrant provision
-==> ubuntu-arm-lfs: Running provisioner: ansible...
-    ubuntu-arm-lfs: Running ansible-playbook...
-
-PLAY [Print node name] *********************************************************
-
-TASK [Gathering Facts] *********************************************************
-ok: [ubuntu-arm-lfs]
-
-TASK [Display the node name] ***************************************************
-ok: [ubuntu-arm-lfs] => {
-    "msg": "Node name: ubuntu-arm-lfs"
-}
-...
-```
-
-### Step 1 - Provision an aarch64 build node
-
-TO DO: Increase disk size by Vagrantfile or choose another image... Jenkins Agent can be not work..
-
-```bash
-[eugenio@MacBook-Pro-di-Eugenio-2.fritz.box]:~/WORK/Generic-Distro-ToolK1t $ vagrant provision
-==> ubuntu-arm-lfs: Running provisioner: ansible...
-    ubuntu-arm-lfs: Running ansible-playbook...
-
-PLAY [Print node name] *********************************************************
-
-TASK [Gathering Facts] *********************************************************
-ok: [ubuntu-arm-lfs]
-
-TASK [Display the node name] ***************************************************
-ok: [ubuntu-arm-lfs] => {
-    "msg": "Node name: ubuntu-arm-lfs"
-}
-```
-
-### Step 2 - Create Jenkins Folder and jobs using start.sh
-
-```bash
-
-ubuntu@ns3137793:~/gdt$ bash start.sh 
-
-=========================================
- Welcome to the Generic Distro Toolkit! 
-=========================================
-
-Inventory file found. Proceeding...
-
-Select an option:
-0)  Create Jenkins Folders
-1)  Build AMD64 all Jenkins Jobs
-2)  Build AMD64 cross_toolchain Jenkins Jobs
-3)  Build AMD64 cross_compiling_temporary_tools Jenkins Jobs
-4)  Build AMD64 chroot_and_building_additional_temporary_tools Jenkins Jobs
-5)  Build AMD64 basic_system_software Jenkins Jobs
-6)  Build AMD64 system_configuration Jenkins Jobs
-7)  Build AMD64 containers Jenkins Jobs
-8)  Build AARCH64 all Jenkins Jobs
-9)  Build AARCH64 cross_toolchain Jenkins Jobs
-10) Build AARCH64 cross_compiling_temporary_tools Jenkins Jobs
-11) Build AARCH64 chroot_and_building_additional_temporary_tools Jenkins Jobs
-12) Build AARCH64 basic_system_software Jenkins Jobs
-13) Build AARCH64 system_configuration Jenkins Jobs
-14) Build AARCH64 containers Jenkins Jobs
-15) Exit
-
-Enter your choice: 0
-Building Jenkins Folders...
-
-PLAY [Create GNU/Linux GDT (Garanti Del Talento)] **********************************************************************************************************************************************************************************************************************
-
-TASK [Gathering Facts] *************************************************************************************************************************************************************************************************************************************************
-ok: [localhost]
-
-TASK [ansible-gdt : Include aarch64_jobs.yml tasks] ********************************************************************************************************************************************************************************************************************
-included: /home/ubuntu/gdt/jenkins-lfs/playbooks/roles/ansible-gdt/tasks/aarch64_jobs.yml for localhost
-
-TASK [ansible-gdt : Create Jenkins Folder (aarch64)] *******************************************************************************************************************************************************************************************************************
-ok: [localhost] => (item=aarch64_cross_toolchain)
-ok: [localhost] => (item=aarch64_cross_compiling_temporary_tools)
-ok: [localhost] => (item=aarch64_chroot_and_building_additional_temporary_tools)
-ok: [localhost] => (item=aarch64_basic_system_software)
-ok: [localhost] => (item=aarch64_system_configuration)
-ok: [localhost] => (item=aarch64_containers)
-
-TASK [ansible-gdt : Include amd64_jobs.yml tasks] **********************************************************************************************************************************************************************************************************************
-included: /home/ubuntu/gdt/jenkins-lfs/playbooks/roles/ansible-gdt/tasks/amd64_jobs.yml for localhost
-
-TASK [ansible-gdt : Create Jenkins Folder (amd64)] *********************************************************************************************************************************************************************************************************************
-ok: [localhost] => (item=amd64_cross_toolchain)
-ok: [localhost] => (item=amd64_cross_compiling_temporary_tools)
-ok: [localhost] => (item=amd64_chroot_and_building_additional_temporary_tools)
-ok: [localhost] => (item=amd64_basic_system_software)
-ok: [localhost] => (item=amd64_system_configuration)
-ok: [localhost] => (item=amd64_containers)
-
-PLAY RECAP *************************************************************************************************************************************************************************************************************************************************************
-localhost                  : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
-```
