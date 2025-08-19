@@ -1,5 +1,5 @@
-# Generic distro toolkit for GNU/Linux operating system
-## Another implementation of ALFS (Automated Linux From Scratch)
+# Generic Distro Toolkit for GNU/Linux
+## Another approach to ALFS (Automated Linux From Scratch)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -8,6 +8,41 @@
 I’m building GNU/Linux following LFS (Linux From Scratch) with Ansible and Jenkins. This project is a general-purpose framework for building Linux distributions in a semi-automated and DevOps way.
 
 gdt (Generic Distro Toolkit) is a work-in-progress.
+
+
+### Project Structure
+
+```bash
+Generic-Distro-ToolK1t/
+├── jenkins-lfs/               # LFS build automation
+│   └── start.sh               # Bash script to handle most tasks, especially build jobs for different architectures and LFS sections
+│   └── chroot_in.sh           # Structured command wrapper to enter chroot
+│   └── playbooks/             # Ansible playbooks for system setup
+│       └── roles/
+│       │    └── ansible-gdt/  # Main GDT Ansible role
+│       │        └── tasks/          # Contains aarch64_jobs and amd64_jobs (Jenkins job creation) and system_conf (generic configuration for both architectures)
+│       │        └── vars/main.yaml  # Defines all Jenkins jobs, package build instructions, and configuration tasks
+│       │        └── files/          # Static files (OS configs, init scripts, bash scripts, kernel configs)
+│       └── aarch64_lfs.yml    # Configure the aarch64 build node (also acts as Jenkins slave)
+│       └── reset_jobs.yml     # Remove all Jenkins jobs
+│       └── starts.yml         # Launch ansible-gdt role (start.sh injects tags to start specific tasks)
+├── service-manager/           # Go-based service manager (work in progress)
+│   ├── main.go                # Terminal UI for managing services
+│   ├── go.mod                 # Go module dependencies
+│   └── README.md              # Service manager documentation
+├── images/                    # Screenshots and documentation assets
+├── os_images/                 # Vagrant-synced folder containing *.img files (aarch64)
+└── Vagrantfile                # Defines the aarch64 build node (amd64 builds run directly on Jenkins master for now)
+```
+
+### Build amd64 GNU/Linux Operating System
+
+to do...
+
+
+### Build aarch64 GNU/Linux Operating System
+
+to do...
 
 ### LFS Numbered Job Jenkins
 
@@ -326,21 +361,4 @@ ok: [localhost] => (item=amd64_containers)
 
 PLAY RECAP *************************************************************************************************************************************************************************************************************************************************************
 localhost                  : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
-```
-
-### Project Structure
-
-```bash
-Generic-Distro-ToolK1t/
-├── jenkins-lfs/              # LFS build automation
-│   ├── playbooks/            # Ansible playbooks for system setup
-│       └── roles/
-│           └── ansible-gdt/  # Main GDT Ansible role
-│ 
-├── service-manager/         # Go-based service management tool
-│   ├── main.go              # Terminal UI service manager
-│   ├── go.mod               # Go module dependencies
-│   └── README.md            # Service manager documentation
-├── images/                  # Screenshots and documentation images
-└── Vagrantfile              # Development environment setup
 ```
