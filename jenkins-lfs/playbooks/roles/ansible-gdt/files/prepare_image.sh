@@ -133,7 +133,7 @@ if [[ "$BUILD_MODE" == "host_libvirt_amd64" ]]; then
   NET_DEV="ens3"
   INITTAB_EXTRA_LINE=""
 elif [[ "$BUILD_MODE" == "vagrant_qemu_aarch64" ]]; then
-  GRUB_CONSOLE="console=ttyAMA0"
+  GRUB_CONSOLE="console=tty1 console=ttyAMA0"
   GRUB_TARGET=arm64-efi
   GRUB_DISK_FSTAB="/dev/vda1      /boot             vfat     defaults            1     1"
   # TODO: force modern net device name
