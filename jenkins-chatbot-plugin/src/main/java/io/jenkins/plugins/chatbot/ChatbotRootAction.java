@@ -3,6 +3,7 @@ package io.jenkins.plugins.chatbot;
 import hudson.Extension;
 import hudson.model.RootAction;
 import jenkins.model.Jenkins;
+import net.sf.json.JSONObject;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.HttpResponses;
 import org.kohsuke.stapler.QueryParameter;
@@ -65,7 +66,11 @@ public class ChatbotRootAction implements RootAction {
         
         try {
             ChatbotResponse response = chatbotService.processMessage(message, studentId);
-            return HttpResponses.okJSON(response);
+            JSONObject jsonResponse = new JSONObject();
+            jsonResponse.put("message", response.getMessage());
+            jsonResponse.put("messageType", response.getMessageType());
+            jsonResponse.put("data", response.getData());
+            return HttpResponses.okJSON(jsonResponse);
         } catch (Exception e) {
             LOGGER.severe("Error processing chatbot message: " + e.getMessage());
             return HttpResponses.errorJSON("Sorry, I encountered an error. Please try again.");
@@ -79,7 +84,9 @@ public class ChatbotRootAction implements RootAction {
         Jenkins.get().checkPermission(Jenkins.READ);
         
         try {
-            return HttpResponses.okJSON(chatbotService.getAvailableBuilds(studentId));
+            JSONObject jsonResponse = new JSONObject();
+            jsonResponse.put("builds", chatbotService.getAvailableBuilds(studentId));
+            return HttpResponses.okJSON(jsonResponse);
         } catch (Exception e) {
             LOGGER.severe("Error getting builds for student: " + e.getMessage());
             return HttpResponses.errorJSON("Error retrieving builds");
@@ -96,8 +103,11 @@ public class ChatbotRootAction implements RootAction {
         
         try {
             boolean success = chatbotService.startBuild(buildNumber, studentId);
+            JSONObject jsonResponse = new JSONObject();
             if (success) {
-                return HttpResponses.okJSON("Build started successfully!");
+                jsonResponse.put("message", "Build started successfully!");
+                jsonResponse.put("success", true);
+                return HttpResponses.okJSON(jsonResponse);
             } else {
                 return HttpResponses.errorJSON("Failed to start build");
             }
