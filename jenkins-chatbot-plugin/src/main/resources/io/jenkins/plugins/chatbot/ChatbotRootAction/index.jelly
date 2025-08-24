@@ -1,0 +1,267 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+  <l:layout title="Student Chatbot" permission="${app.READ}">
+    <l:header>
+      <style>
+        .chatbot-container {
+          max-width: 800px;
+          margin: 20px auto;
+          padding: 20px;
+          background: #f9f9f9;
+          border-radius: 10px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .chat-header {
+          text-align: center;
+          margin-bottom: 30px;
+          color: #333;
+        }
+        
+        .chat-messages {
+          height: 400px;
+          overflow-y: auto;
+          border: 1px solid #ddd;
+          padding: 15px;
+          background: white;
+          border-radius: 5px;
+          margin-bottom: 15px;
+        }
+        
+        .message {
+          margin-bottom: 15px;
+          padding: 10px;
+          border-radius: 8px;
+          max-width: 70%;
+        }
+        
+        .message.user {
+          background: #007acc;
+          color: white;
+          margin-left: auto;
+          text-align: right;
+        }
+        
+        .message.bot {
+          background: #e9e9e9;
+          color: #333;
+          margin-right: auto;
+        }
+        
+        .message .timestamp {
+          font-size: 0.8em;
+          opacity: 0.7;
+          margin-top: 5px;
+        }
+        
+        .chat-input-container {
+          display: flex;
+          gap: 10px;
+        }
+        
+        .chat-input {
+          flex: 1;
+          padding: 12px;
+          border: 1px solid #ddd;
+          border-radius: 5px;
+          font-size: 16px;
+        }
+        
+        .chat-send {
+          padding: 12px 24px;
+          background: #007acc;
+          color: white;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 16px;
+        }
+        
+        .chat-send:hover {
+          background: #005a9e;
+        }
+        
+        .chat-send:disabled {
+          background: #ccc;
+          cursor: not-allowed;
+        }
+        
+        .student-info {
+          background: #e8f4fd;
+          padding: 10px;
+          border-radius: 5px;
+          margin-bottom: 20px;
+          border-left: 4px solid #007acc;
+        }
+        
+        .typing-indicator {
+          display: none;
+          font-style: italic;
+          color: #666;
+          margin-bottom: 10px;
+        }
+        
+        .quick-actions {
+          margin-top: 10px;
+          text-align: center;
+        }
+        
+        .quick-action-btn {
+          background: #f0f0f0;
+          border: 1px solid #ddd;
+          padding: 8px 16px;
+          margin: 5px;
+          border-radius: 20px;
+          cursor: pointer;
+          color: #333;
+          text-decoration: none;
+          display: inline-block;
+          font-size: 14px;
+        }
+        
+        .quick-action-btn:hover {
+          background: #e0e0e0;
+          text-decoration: none;
+          color: #333;
+        }
+      </style>
+    </l:header>
+    
+    <l:main-panel>
+      <div class="chatbot-container">
+        <div class="chat-header">
+          <h1>🤖 Jenkins Student Assistant</h1>
+          <p>Hi! I'm here to help you start your assigned Jenkins builds. Just tell me which build you'd like to run!</p>
+        </div>
+        
+        <div class="student-info">
+          <strong>Student ID:</strong> <span id="studentId">Loading...</span>
+        </div>
+        
+        <div id="chatMessages" class="chat-messages">
+          <div class="message bot">
+            <div class="content">
+              👋 Welcome! I can help you start your Jenkins builds. Try typing:
+              <br/>• "list" to see available builds
+              <br/>• "build 1" to start build number 1
+              <br/>• "help" for more options
+            </div>
+            <div class="timestamp" id="initialTime"></div>
+          </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+          Bot is typing...
+        </div>
+        
+        <div class="chat-input-container">
+          <input type="text" id="chatInput" class="chat-input" placeholder="Type your message here..." />
+          <button id="sendButton" class="chat-send">Send</button>
+        </div>
+        
+        <div class="quick-actions">
+          <a href="#" class="quick-action-btn" onclick="sendQuickMessage('list')">📋 List Builds</a>
+          <a href="#" class="quick-action-btn" onclick="sendQuickMessage('help')">❓ Help</a>
+          <a href="#" class="quick-action-btn" onclick="sendQuickMessage('build 1')">🚀 Start Build 1</a>
+        </div>
+      </div>
+    </l:main-panel>
+    
+    <script>
+      // Initialize chatbot
+      let studentId = 'student-' + Math.random().toString(36).substr(2, 9);
+      document.getElementById('studentId').textContent = studentId;
+      document.getElementById('initialTime').textContent = new Date().toLocaleTimeString();
+      
+      const chatMessages = document.getElementById('chatMessages');
+      const chatInput = document.getElementById('chatInput');
+      const sendButton = document.getElementById('sendButton');
+      const typingIndicator = document.getElementById('typingIndicator');
+      
+      // Send message function
+      function sendMessage() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+        
+        // Add user message to chat
+        addMessage(message, 'user');
+        chatInput.value = '';
+        
+        // Show typing indicator
+        showTyping();
+        
+        // Send to backend
+        fetch(rootURL + '/student-chatbot/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: 'message=' + encodeURIComponent(message) + '&amp;studentId=' + encodeURIComponent(studentId)
+        })
+        .then(response => response.json())
+        .then(data => {
+          hideTyping();
+          if (data.status === 'ok') {
+            addMessage(data.data.message, 'bot');
+          } else {
+            addMessage('Sorry, I encountered an error: ' + data.message, 'bot');
+          }
+        })
+        .catch(error => {
+          hideTyping();
+          addMessage('Sorry, I encountered a connection error. Please try again.', 'bot');
+          console.error('Error:', error);
+        });
+      }
+      
+      // Add message to chat
+      function addMessage(content, sender) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message ' + sender;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'content';
+        contentDiv.innerHTML = content.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
+        const timestampDiv = document.createElement('div');
+        timestampDiv.className = 'timestamp';
+        timestampDiv.textContent = new Date().toLocaleTimeString();
+        
+        messageDiv.appendChild(contentDiv);
+        messageDiv.appendChild(timestampDiv);
+        chatMessages.appendChild(messageDiv);
+        
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+      
+      // Quick message function
+      function sendQuickMessage(message) {
+        chatInput.value = message;
+        sendMessage();
+      }
+      
+      // Show/hide typing indicator
+      function showTyping() {
+        typingIndicator.style.display = 'block';
+        sendButton.disabled = true;
+      }
+      
+      function hideTyping() {
+        typingIndicator.style.display = 'none';
+        sendButton.disabled = false;
+      }
+      
+      // Event listeners
+      sendButton.addEventListener('click', sendMessage);
+      chatInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          sendMessage();
+        }
+      });
+      
+      // Focus on input
+      chatInput.focus();
+    </script>
+  </l:layout>
+</j:jelly>
