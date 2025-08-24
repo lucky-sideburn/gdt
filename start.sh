@@ -21,6 +21,7 @@ function create_qemu_vm_from_img() {
       -netdev user,id=net0,hostfwd=tcp::2222-:22 \
       -device virtio-net-device,netdev=net0 \
       -device virtio-gpu-pci \
+      -device VGA \
       -device usb-ehci \
       -device usb-kbd \
       -display cocoa \
@@ -39,6 +40,7 @@ function create_qemu_vm_from_img() {
       -netdev user,id=net0,hostfwd=tcp::2222-:22 \
       -device virtio-net-device,netdev=net0 \
       -device virtio-gpu-pci \
+      -device VGA \
       -device usb-ehci \
       -device usb-kbd \
       -display cocoa \
